@@ -1,0 +1,12 @@
+# This file ensures the commodities folder is tracked by git
+# Add your commodity images here following the naming convention:
+# 
+# WITH SERIAL NUMBERS (recommended for organization):
+# - 1.cotton.jpg, 2.paddy.jpg, 3.wheat.jpg, etc.
+# 
+# WITHOUT SERIAL NUMBERS:
+# - wheat.jpg, rice.png, groundnut.jpg, etc.
+# 
+# - Use lowercase with hyphens for spaces (e.g., castor-seed.jpg)
+# - Recommended size: 400x400 pixels
+# - Supported formats: jpg, png, webp, jpeg

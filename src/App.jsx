@@ -141,6 +141,61 @@ function App() {
       if (response.success && response.data.length > 0) {
         const formattedData = marketPriceAPI.formatPriceData(response.data);
         
+        // Check if results match the requested commodity
+        const requestedCommodity = intent.commodity?.toLowerCase();
+        
+        // For market-wide queries (no commodity specified), always show current data
+        // For commodity-specific queries, check if the commodity matches
+        const isMarketWideQuery = !requestedCommodity;
+        
+        if (isMarketWideQuery) {
+          console.log('✓ Market-wide query detected - showing current data only');
+        }
+        
+        const hasMatchingCommodity = isMarketWideQuery || (requestedCommodity && formattedData.some(item => 
+          item.commodity.toLowerCase().includes(requestedCommodity) || 
+          requestedCommodity.includes(item.commodity.toLowerCase())
+        ));
+        
+        // If no matching commodity found AND it's a commodity-specific query, try historical data
+        if (!hasMatchingCommodity && !isMarketWideQuery) {
+          console.log('No matching commodity in API results, checking historical data...');
+          const lastAvailablePrice = await marketPriceCache.getLastAvailablePrice(queryParams);
+          
+          if (lastAvailablePrice && lastAvailablePrice.data.length > 0) {
+            // Found historical data with matching commodity
+            const historicalData = marketPriceAPI.formatPriceData(lastAvailablePrice.data);
+            
+            const historicalMessage = queryLanguage === 'hi'
+              ? `आज के लिए ${intent.commodity} का डेटा उपलब्ध नहीं है।\n\nअंतिम उपलब्ध कीमत (${lastAvailablePrice.cacheDate}):`
+              : `Today's data not available for ${intent.commodity}.\n\nShowing last available price (${lastAvailablePrice.cacheDate}):`;
+            
+            const responseText = await geminiService.generateResponse(
+              historicalData,
+              text,
+              queryLanguage
+            );
+            
+            const botMessage = {
+              id: Date.now() + 2,
+              type: 'bot',
+              text: historicalMessage + '\n\n' + responseText,
+              timestamp: new Date(),
+              language: queryLanguage,
+              priceData: historicalData.slice(0, 10),
+              isHistoricalData: true
+            };
+            
+            setMessages(prev => [...prev, botMessage]);
+            
+            if (voiceEnabled && isVoice) {
+              voiceService.speak(historicalMessage + ' ' + responseText, queryLanguage);
+            }
+            
+            return; // Exit early, don't show wrong commodity data
+          }
+        }
+        
         // Generate response using Gemini
         const responseText = await geminiService.generateResponse(
           formattedData,
@@ -183,17 +238,52 @@ function App() {
           voiceService.speak(responseText, queryLanguage);
         }
       } else {
-        // No data found - try to find nearby markets
-        console.log('No data found, searching for nearby markets...');
+        // No data found - first try to get last available price from DB
+        console.log('No data found for today, checking for last available price in DB...');
         
-        const nearbyMarkets = await geminiService.findNearbyMarkets(
-          intent.location,
-          intent.commodity,
-          10  // Get 10 nearest markets
-        );
+        const lastAvailablePrice = await marketPriceCache.getLastAvailablePrice(queryParams);
         
-        if (nearbyMarkets && nearbyMarkets.length > 0) {
-          console.log('Trying nearby markets:', nearbyMarkets);
+        if (lastAvailablePrice && lastAvailablePrice.data.length > 0) {
+          // Found historical data in DB
+          const formattedData = marketPriceAPI.formatPriceData(lastAvailablePrice.data);
+          
+          const historicalMessage = queryLanguage === 'hi'
+            ? `आज के लिए ${intent.commodity} का डेटा उपलब्ध नहीं है।\n\nअंतिम उपलब्ध कीमत (${lastAvailablePrice.cacheDate}):`
+            : `Today's data not available for ${intent.commodity}.\n\nShowing last available price (${lastAvailablePrice.cacheDate}):`;
+          
+          const responseText = await geminiService.generateResponse(
+            formattedData,
+            text,
+            queryLanguage
+          );
+          
+          const botMessage = {
+            id: Date.now() + 2,
+            type: 'bot',
+            text: historicalMessage + '\n\n' + responseText,
+            timestamp: new Date(),
+            language: queryLanguage,
+            priceData: formattedData.slice(0, 10),
+            isHistoricalData: true
+          };
+          
+          setMessages(prev => [...prev, botMessage]);
+          
+          if (voiceEnabled && isVoice) {
+            voiceService.speak(historicalMessage + ' ' + responseText, queryLanguage);
+          }
+        } else {
+          // No historical data - try to find nearby markets
+          console.log('No historical data found, searching for nearby markets...');
+          
+          const nearbyMarkets = await geminiService.findNearbyMarkets(
+            intent.location,
+            intent.commodity,
+            10  // Get 10 nearest markets
+          );
+          
+          if (nearbyMarkets && nearbyMarkets.length > 0) {
+            console.log('Trying nearby markets:', nearbyMarkets);
           
           // Try searching in nearby markets (district-level search for better results)
           let foundData = false;
@@ -271,24 +361,25 @@ function App() {
               voiceService.speak(noDataMessage, queryLanguage);
             }
           }
-        } else {
-          // Couldn't find nearby markets
-          const noDataMessage = queryLanguage === 'hi'
-            ? 'क्षमा करें, इस जानकारी के लिए कोई डेटा उपलब्ध नहीं है। कृपया अलग स्थान या फसल के साथ प्रयास करें।'
-            : 'Sorry, no data available for this query. Please try with a different location or commodity.';
-          
-          const botMessage = {
-            id: Date.now() + 2,
-            type: 'bot',
-            text: noDataMessage,
-            timestamp: new Date(),
-            language: queryLanguage
-          };
+          } else {
+            // Couldn't find nearby markets
+            const noDataMessage = queryLanguage === 'hi'
+              ? 'क्षमा करें, इस जानकारी के लिए कोई डेटा उपलब्ध नहीं है। कृपया अलग स्थान या फसल के साथ प्रयास करें।'
+              : 'Sorry, no data available for this query. Please try with a different location or commodity.';
+            
+            const botMessage = {
+              id: Date.now() + 2,
+              type: 'bot',
+              text: noDataMessage,
+              timestamp: new Date(),
+              language: queryLanguage
+            };
 
-          setMessages(prev => [...prev, botMessage]);
+            setMessages(prev => [...prev, botMessage]);
 
-          if (voiceEnabled && isVoice) {
-            voiceService.speak(noDataMessage, queryLanguage);
+            if (voiceEnabled && isVoice) {
+              voiceService.speak(noDataMessage, queryLanguage);
+            }
           }
         }
       }

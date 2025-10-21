@@ -83,13 +83,15 @@ class MarketPriceCache {
       }
 
       // Strategy 2: If specific commodity+location query, check if we have it in broader cache
+      // IMPORTANT: Only use this strategy if we're looking for a specific commodity
+      // For market-wide queries (no commodity), we should NOT use old cached data
       if (params.commodity && (params.district || params.market)) {
         console.log('Checking if commodity exists in broader cached results...');
         
         let query = supabase
           .from('market_price_cache')
           .select('*')
-          .eq('cache_date', today);
+          .eq('cache_date', today);  // CRITICAL: Only check today's cache
 
         // Look for entries that might contain this commodity
         if (params.state) {
@@ -117,7 +119,7 @@ class MarketPriceCache {
 
             if (matchingRecords.length > 0) {
               console.log(`✓ Found ${matchingRecords.length} matching records in cached data!`);
-              console.log('  From cache entry:', cachedEntry.cache_key);
+              console.log('  From cache entry:', cachedEntry.cache_key, 'Date:', cachedEntry.cache_date);
               return {
                 success: true,
                 data: matchingRecords,
@@ -129,6 +131,9 @@ class MarketPriceCache {
             }
           }
         }
+      } else if (!params.commodity) {
+        // For market-wide queries without commodity, log that we're skipping Strategy 2
+        console.log('Market-wide query detected - skipping broader cache search to avoid old data');
       }
 
       console.log('✗ Cache miss for key:', cacheKey, 'on date:', today);
@@ -326,6 +331,136 @@ class MarketPriceCache {
     } catch (error) {
       console.error('Error in getAvailableDates:', error);
       return [];
+    }
+  }
+
+  /**
+   * Get the last available price from database (most recent date before today)
+   * Used when today's data is not available
+   * Tries multiple strategies: exact match, without market, without district
+   */
+  async getLastAvailablePrice(params) {
+    if (!isSupabaseConfigured()) {
+      console.log('Supabase not configured, cannot fetch last available price');
+      return null;
+    }
+
+    try {
+      const today = this.getTodayDate();
+      
+      // Strategy 1: Try exact cache key
+      const exactCacheKey = this.generateCacheKey(params);
+      console.log('Fetching last available price for key:', exactCacheKey);
+
+      let { data, error } = await supabase
+        .from('market_price_cache')
+        .select('*')
+        .eq('cache_key', exactCacheKey)
+        .lt('cache_date', today)
+        .order('cache_date', { ascending: false })
+        .limit(1);
+
+      // Strategy 2: Try without market (just commodity + district + state)
+      if ((!data || data.length === 0) && params.market) {
+        console.log('Trying without market filter...');
+        const keyWithoutMarket = this.generateCacheKey({
+          commodity: params.commodity,
+          state: params.state,
+          district: params.district
+        });
+        
+        const result = await supabase
+          .from('market_price_cache')
+          .select('*')
+          .eq('cache_key', keyWithoutMarket)
+          .lt('cache_date', today)
+          .order('cache_date', { ascending: false })
+          .limit(1);
+        
+        data = result.data;
+        error = result.error;
+      }
+
+      // Strategy 3: Try with just commodity + state
+      if ((!data || data.length === 0) && params.district) {
+        console.log('Trying with just commodity + state...');
+        const keyWithoutDistrict = this.generateCacheKey({
+          commodity: params.commodity,
+          state: params.state
+        });
+        
+        const result = await supabase
+          .from('market_price_cache')
+          .select('*')
+          .eq('cache_key', keyWithoutDistrict)
+          .lt('cache_date', today)
+          .order('cache_date', { ascending: false })
+          .limit(1);
+        
+        data = result.data;
+        error = result.error;
+      }
+
+      // Strategy 4: Search in broader cache by filtering price_data
+      if ((!data || data.length === 0) && params.commodity) {
+        console.log('Searching in broader cache for matching commodity...');
+        
+        const result = await supabase
+          .from('market_price_cache')
+          .select('*')
+          .eq('commodity', params.commodity)
+          .lt('cache_date', today)
+          .order('cache_date', { ascending: false })
+          .limit(10);
+        
+        if (result.data && result.data.length > 0) {
+          // Filter through the results to find matching location
+          for (const entry of result.data) {
+            const matchingRecords = entry.price_data.filter(record => {
+              const commodityMatch = record.commodity?.toLowerCase() === params.commodity?.toLowerCase();
+              const districtMatch = !params.district || 
+                record.district?.toLowerCase().includes(params.district.toLowerCase());
+              const stateMatch = !params.state || 
+                record.state?.toLowerCase().includes(params.state.toLowerCase());
+              
+              return commodityMatch && districtMatch && stateMatch;
+            });
+
+            if (matchingRecords.length > 0) {
+              console.log(`✓ Found ${matchingRecords.length} matching records in historical cache from ${entry.cache_date}`);
+              return {
+                success: true,
+                data: matchingRecords,
+                total: matchingRecords.length,
+                message: `Last available data from ${entry.cache_date}`,
+                fromCache: true,
+                cacheDate: entry.cache_date,
+                isHistorical: true
+              };
+            }
+          }
+        }
+      }
+
+      if (error || !data || data.length === 0) {
+        console.log('No historical data found for this query');
+        return null;
+      }
+
+      const historicalEntry = data[0];
+      console.log('✓ Found last available price from:', historicalEntry.cache_date);
+      return {
+        success: true,
+        data: historicalEntry.price_data,
+        total: historicalEntry.price_data.length,
+        message: `Last available data from ${historicalEntry.cache_date}`,
+        fromCache: true,
+        cacheDate: historicalEntry.cache_date,
+        isHistorical: true
+      };
+    } catch (error) {
+      console.error('Error in getLastAvailablePrice:', error);
+      return null;
     }
   }
 

@@ -8,6 +8,8 @@ A Progressive Web App (PWA) that provides real-time Indian agricultural market p
 - **Multi-language Support**: Supports Hindi, Tamil, Telugu, Kannada, Malayalam, Marathi, Gujarati, Punjabi, Bengali, Odia, Assamese, and English
 - **Real-time Market Data**: Fetches live data from data.gov.in
 - **Smart Caching**: Supabase-powered permanent storage reduces API calls by 60-80%
+- **Commodity Images**: Visual display of commodity images alongside prices 🎨
+- **Historical Prices**: Shows last available price from DB when today's data is unavailable 📊
 - **Smart Disambiguation**: Intelligently handles ambiguous location queries
 - **Voice Synthesis**: Listen to price information in your preferred language
 - **PWA Features**: Installable, works offline, push notifications ready
@@ -124,6 +126,26 @@ npm run preview
 - "தமிழ்நாட்டில் தக்காளி விலை என்ன?"
 - "కర్ణాటకలో బియ్యం ధర ఎంత?"
 
+## New Features 🆕
+
+### 1. Commodity Images 🎨
+- Visual display of commodity images alongside market prices
+- Add your own images to `public/commodities/` folder
+- Automatic fallback to icon if image not found
+- See `NEW_FEATURES.md` for detailed setup instructions
+
+### 2. Historical Price Fallback 📊
+- When today's data is unavailable, app shows last available price from database
+- Clear "Historical" badge indicates data is from a previous date
+- Reduces "no data available" scenarios
+- Works seamlessly with existing nearby market search
+
+**Priority Order:**
+1. Today's price (from cache or API)
+2. Last available price from database (with date indicator)
+3. Nearby market prices
+4. "No data available" message
+
 ## Architecture 🏗️
 
 ```
@@ -134,6 +156,7 @@ market-price-app/
 │   ├── services/        # API and service layers
 │   │   ├── marketPriceAPI.js
 │   │   ├── marketPriceCache.js
+│   │   ├── commodityImageService.js  # NEW: Image handling
 │   │   ├── supabaseClient.js
 │   │   ├── geminiService.js
 │   │   └── voiceService.js
@@ -141,8 +164,10 @@ market-price-app/
 │   ├── main.jsx         # Entry point
 │   └── index.css        # Global styles
 ├── public/              # Static assets
+│   └── commodities/     # NEW: Commodity images folder
 ├── supabase-schema.sql  # Database schema for caching
 ├── SUPABASE_SETUP.md    # Supabase setup guide
+├── NEW_FEATURES.md      # NEW: New features documentation
 ├── vite.config.js       # Vite configuration
 ├── tailwind.config.js   # Tailwind CSS configuration
 └── package.json         # Dependencies

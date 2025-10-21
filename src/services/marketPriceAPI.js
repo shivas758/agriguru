@@ -145,9 +145,11 @@ class MarketPriceAPI {
   }
 
   normalizeCommodityName(commodity) {
-    // Just capitalize first letter - let API do fuzzy matching
-    // Gemini already extracts the commodity name correctly
-    return commodity.charAt(0).toUpperCase() + commodity.slice(1).toLowerCase();
+    // Capitalize each word for proper matching with API
+    // API uses title case for commodities (e.g., "Castor Seed", not "Castor seed")
+    return commodity.split(' ')
+      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+      .join(' ');
   }
 
   normalizeStateName(state) {
