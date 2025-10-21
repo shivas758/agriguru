@@ -1,4 +1,5 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import marketPriceCache from './marketPriceCache';
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 

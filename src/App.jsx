@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import ChatMessage from './components/ChatMessage';
 import marketPriceAPI from './services/marketPriceAPI';
+import marketPriceCache from './services/marketPriceCache';
 import geminiService from './services/geminiService';
 import voiceService from './services/voiceService';
 
@@ -130,8 +131,8 @@ function App() {
       };
       console.log('Query parameters for API:', JSON.stringify(queryParams, null, 2));
 
-      // Try with district variations if available
-      const response = await marketPriceAPI.fetchMarketPricesWithVariations(
+      // Try with district variations if available - using cache
+      const response = await marketPriceCache.fetchMarketPricesWithCache(
         queryParams,
         districtVariations
       );
