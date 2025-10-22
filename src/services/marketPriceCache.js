@@ -107,12 +107,17 @@ class MarketPriceCache {
           // Search through cached results for matching commodity+location
           for (const cachedEntry of broadMatches) {
             const matchingRecords = cachedEntry.price_data.filter(record => {
+              // Handle both capitalized (Variety-wise API) and lowercase field names
+              const recordCommodity = (record.Commodity || record.commodity || '').toLowerCase();
+              const recordDistrict = (record.District || record.district || '').toLowerCase();
+              const recordMarket = (record.Market || record.market || '').toLowerCase();
+              
               const commodityMatch = !params.commodity || 
-                record.commodity?.toLowerCase() === params.commodity.toLowerCase();
+                recordCommodity === params.commodity.toLowerCase();
               const districtMatch = !params.district || 
-                record.district?.toLowerCase().includes(params.district.toLowerCase());
+                recordDistrict.includes(params.district.toLowerCase());
               const marketMatch = !params.market || 
-                record.market?.toLowerCase().includes(params.market.toLowerCase());
+                recordMarket.includes(params.market.toLowerCase());
               
               return commodityMatch && districtMatch && marketMatch;
             });
@@ -163,34 +168,67 @@ class MarketPriceCache {
       const today = this.getTodayDate();
       const cacheEntries = [];
 
-      // 1. Cache the original query
+      // IMPORTANT: Filter data to match requested location before caching
+      // Don't cache data from wrong districts/markets
+      let filteredData = priceData;
+      if (params.district || params.market) {
+        filteredData = priceData.filter(record => {
+          // Handle both capitalized (Variety-wise API) and lowercase field names
+          const recordDistrict = (record.District || record.district || '').toLowerCase();
+          const recordMarket = (record.Market || record.market || '').toLowerCase();
+          
+          const districtMatch = !params.district || 
+            recordDistrict.includes(params.district.toLowerCase());
+          const marketMatch = !params.market || 
+            recordMarket.includes(params.market.toLowerCase());
+          
+          return districtMatch && marketMatch;
+        });
+        
+        if (filteredData.length === 0) {
+          console.log('✗ No data matches requested location, skipping cache for specific query');
+          // Still cache individual combinations below
+        } else if (filteredData.length < priceData.length) {
+          console.log(`✓ Filtered data from ${priceData.length} to ${filteredData.length} records matching location`);
+        }
+      }
+
+      // 1. Cache the original query (only with matching data)
       const originalCacheKey = this.generateCacheKey(params);
-      console.log('Caching data for original query:', originalCacheKey);
       
-      cacheEntries.push({
-        cache_key: originalCacheKey,
-        cache_date: today,
-        commodity: params.commodity || null,
-        state: params.state || null,
-        district: params.district || null,
-        market: params.market || null,
-        price_data: priceData,
-        cached_at: new Date().toISOString(),
-        query_count: 1
-      });
+      if (filteredData.length > 0) {
+        console.log('Caching data for original query:', originalCacheKey);
+        
+        cacheEntries.push({
+          cache_key: originalCacheKey,
+          cache_date: today,
+          commodity: params.commodity || null,
+          state: params.state || null,
+          district: params.district || null,
+          market: params.market || null,
+          price_data: filteredData,
+          cached_at: new Date().toISOString(),
+          query_count: 1
+        });
+      }
 
       // 2. Extract and cache individual commodity-location combinations
       // Group by commodity + district + state
       const commodityGroups = new Map();
       
       for (const record of priceData) {
-        const key = `${record.commodity?.toLowerCase()}|${record.district?.toLowerCase()}|${record.state?.toLowerCase()}`;
+        // Handle both capitalized (Variety-wise API) and lowercase field names
+        const commodity = record.Commodity || record.commodity;
+        const district = record.District || record.district;
+        const state = record.State || record.state;
+        
+        const key = `${commodity?.toLowerCase()}|${district?.toLowerCase()}|${state?.toLowerCase()}`;
         
         if (!commodityGroups.has(key)) {
           commodityGroups.set(key, {
-            commodity: record.commodity,
-            district: record.district,
-            state: record.state,
+            commodity: commodity,
+            district: district,
+            state: state,
             records: []
           });
         }
@@ -417,11 +455,16 @@ class MarketPriceCache {
           // Filter through the results to find matching location
           for (const entry of result.data) {
             const matchingRecords = entry.price_data.filter(record => {
-              const commodityMatch = record.commodity?.toLowerCase() === params.commodity?.toLowerCase();
+              // Handle both capitalized (Variety-wise API) and lowercase field names
+              const recordCommodity = (record.Commodity || record.commodity || '').toLowerCase();
+              const recordDistrict = (record.District || record.district || '').toLowerCase();
+              const recordState = (record.State || record.state || '').toLowerCase();
+              
+              const commodityMatch = recordCommodity === params.commodity?.toLowerCase();
               const districtMatch = !params.district || 
-                record.district?.toLowerCase().includes(params.district.toLowerCase());
+                recordDistrict.includes(params.district.toLowerCase());
               const stateMatch = !params.state || 
-                record.state?.toLowerCase().includes(params.state.toLowerCase());
+                recordState.includes(params.state.toLowerCase());
               
               return commodityMatch && districtMatch && stateMatch;
             });
@@ -449,10 +492,37 @@ class MarketPriceCache {
 
       const historicalEntry = data[0];
       console.log('✓ Found last available price from:', historicalEntry.cache_date);
+      
+      // IMPORTANT: Filter price_data to match the requested location
+      // Don't return data from wrong districts/markets
+      let filteredData = historicalEntry.price_data;
+      
+      if (params.district || params.market) {
+        filteredData = historicalEntry.price_data.filter(record => {
+          // Handle both capitalized (Variety-wise API) and lowercase field names
+          const recordDistrict = (record.District || record.district || '').toLowerCase();
+          const recordMarket = (record.Market || record.market || '').toLowerCase();
+          
+          const districtMatch = !params.district || 
+            recordDistrict.includes(params.district.toLowerCase());
+          const marketMatch = !params.market || 
+            recordMarket.includes(params.market.toLowerCase());
+          
+          return districtMatch && marketMatch;
+        });
+        
+        if (filteredData.length === 0) {
+          console.log('✗ Historical data found but not for requested location');
+          return null;
+        }
+        
+        console.log(`✓ Filtered to ${filteredData.length} records matching requested location`);
+      }
+      
       return {
         success: true,
-        data: historicalEntry.price_data,
-        total: historicalEntry.price_data.length,
+        data: filteredData,
+        total: filteredData.length,
         message: `Last available data from ${historicalEntry.cache_date}`,
         fromCache: true,
         cacheDate: historicalEntry.cache_date,

@@ -3,6 +3,34 @@ import { Volume2, User, Bot, MapPin, Package, Calendar, TrendingUp, Navigation, 
 import voiceService from '../services/voiceService';
 import commodityImageService from '../services/commodityImageService';
 
+// Helper function to parse DD/MM/YYYY or DD-MM-YYYY format
+const parseDate = (dateStr) => {
+  if (!dateStr) return null;
+  
+  // Handle DD/MM/YYYY or DD-MM-YYYY format
+  const parts = dateStr.split(/[\/\-]/);
+  if (parts.length === 3) {
+    const [day, month, year] = parts;
+    // Create date in YYYY-MM-DD format for proper parsing
+    return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+  }
+  
+  // Fallback to standard parsing
+  return new Date(dateStr);
+};
+
+// Helper function to format date for display
+const formatDate = (dateStr) => {
+  const date = parseDate(dateStr);
+  if (!date || isNaN(date.getTime())) return 'Date N/A';
+  
+  return date.toLocaleDateString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric'
+  });
+};
+
 // Move PriceCard outside to prevent recreation on every render
 const PriceCard = memo(({ price, isNearbyResult, isHistorical }) => {
   const [imageError, setImageError] = useState(false);
@@ -70,7 +98,7 @@ const PriceCard = memo(({ price, isNearbyResult, isHistorical }) => {
         </div>
         <div className="flex items-center gap-1">
           <Calendar className="w-4 h-4" />
-          <span>{new Date(price.arrivalDate).toLocaleDateString('en-IN')}</span>
+          <span>{formatDate(price.arrivalDate)}</span>
         </div>
       </div>
     </div>

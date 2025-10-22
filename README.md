@@ -87,6 +87,11 @@ npm run preview
 4. Generate your API key
 5. The API endpoint we use: `https://api.data.gov.in/resource/9ef84268-d588-465a-a308-a864a43d0070`
 
+**📚 Detailed API Documentation:**
+- **Complete Guide**: See `DATA_GOV_API_GUIDE.md` for comprehensive API documentation
+- **Implementation Examples**: See `API_IMPLEMENTATION_EXAMPLES.md` for code examples
+- **Quick Reference**: See `API_QUICK_REFERENCE.md` for quick lookup
+
 ### Google Gemini Pro API Key
 1. Visit [Google AI Studio](https://makersuite.google.com/app/apikey)
 2. Sign in with your Google account

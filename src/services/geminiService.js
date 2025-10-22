@@ -127,14 +127,14 @@ Language: ${language}
 
 Extract information and return ONLY a JSON object:
 {
-  "commodity": "exact commodity name as user mentioned",
+  "commodity": "exact commodity name as user mentioned, OR null if asking for all commodities",
   "location": {
     "market": "market name if mentioned",
     "district": "district name - INFER from market/city if needed",
     "state": "state name - INFER from market/city/district if needed"
   },
   "date": "YYYY-MM-DD if mentioned, null otherwise",
-  "queryType": "price_inquiry",
+  "queryType": "price_inquiry or market_overview",
   "needsDisambiguation": false
 }
 
@@ -149,13 +149,20 @@ CRITICAL INSTRUCTIONS:
    - Fill in: district and state
 
 3. Examples:
-   - "tomato price in Adoni" → market: "Adoni", district: "Kurnool", state: "Andhra Pradesh"
-   - "paddy in Chittoor" → district: "Chittoor", state: "Andhra Pradesh"
-   - "rice in Hyderabad" → market: "Hyderabad", district: "Hyderabad", state: "Telangana"
+   - "tomato price in Adoni" → commodity: "tomato", market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", queryType: "price_inquiry"
+   - "paddy in Chittoor" → commodity: "paddy", district: "Chittoor", state: "Andhra Pradesh", queryType: "price_inquiry"
+   - "rice in Hyderabad" → commodity: "rice", market: "Hyderabad", district: "Hyderabad", state: "Telangana", queryType: "price_inquiry"
+   - "Pattikonda market prices" → commodity: null, market: "Pattikonda", district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview"
+   - "all commodities in Adoni" → commodity: null, market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview"
+   - "today's prices in Kurnool" → commodity: null, district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview"
 
-4. Use your knowledge of Indian geography to infer locations
-5. Return the commodity name EXACTLY as user mentioned (don't change it)
-6. Return ONLY the JSON object, no other text
+4. Market-wide queries: If user asks for "market prices", "all commodities", "today's prices" without specifying a commodity:
+   - Set commodity to null
+   - Set queryType to "market_overview"
+   
+5. Use your knowledge of Indian geography to infer locations
+6. Return the commodity name EXACTLY as user mentioned (don't change it)
+7. Return ONLY the JSON object, no other text
 
 JSON:`;
 

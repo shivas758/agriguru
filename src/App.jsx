@@ -122,13 +122,19 @@ function App() {
 
       // Fetch market prices based on intent
       const queryParams = {
-        commodity: intent.commodity,
+        commodity: intent.commodity, // Can be null for market-wide queries
         state: intent.location.state,
         district: intent.location.district,
         market: intent.location.market,
         date: intent.date,
-        limit: 50 // Increased to show more markets
+        limit: intent.commodity ? 50 : 100 // More results for market-wide queries
       };
+      
+      // For market-wide queries, remove commodity filter
+      if (!intent.commodity) {
+        delete queryParams.commodity;
+        console.log('Market-wide query detected - fetching all commodities');
+      }
       console.log('Query parameters for API:', JSON.stringify(queryParams, null, 2));
 
       // Try with district variations if available - using cache
@@ -139,36 +145,60 @@ function App() {
       console.log('API response:', response.success ? `${response.data.length} records found` : 'No data');
       
       if (response.success && response.data.length > 0) {
-        const formattedData = marketPriceAPI.formatPriceData(response.data);
+        let formattedData = marketPriceAPI.formatPriceData(response.data);
         
-        // Check if results match the requested commodity
+        // Filter to show only the LATEST price per commodity (per market)
+        // Group by commodity + market to get unique entries
+        const latestPrices = new Map();
+        formattedData.forEach(item => {
+          const key = `${item.commodity}-${item.market}-${item.variety}`.toLowerCase();
+          if (!latestPrices.has(key)) {
+            latestPrices.set(key, item);
+          }
+          // If there's already an entry, keep the one with latest date
+          else {
+            const existing = latestPrices.get(key);
+            const existingDate = new Date(existing.arrivalDate.split(/[\\/\\-]/).reverse().join('-'));
+            const currentDate = new Date(item.arrivalDate.split(/[\\/\\-]/).reverse().join('-'));
+            if (currentDate > existingDate) {
+              latestPrices.set(key, item);
+            }
+          }
+        });
+        
+        // Convert back to array - now has only latest price per commodity
+        formattedData = Array.from(latestPrices.values());
+        console.log(`Filtered to ${formattedData.length} unique latest prices`);
+        
+        // Check if results match the requested location (district or market)
+        const requestedDistrict = intent.location.district?.toLowerCase();
+        const requestedMarket = intent.location.market?.toLowerCase();
         const requestedCommodity = intent.commodity?.toLowerCase();
         
-        // For market-wide queries (no commodity specified), always show current data
-        // For commodity-specific queries, check if the commodity matches
-        const isMarketWideQuery = !requestedCommodity;
+        const hasMatchingLocation = formattedData.some(item => {
+          const matchesDistrict = !requestedDistrict || item.district.toLowerCase().includes(requestedDistrict);
+          const matchesMarket = !requestedMarket || item.market.toLowerCase().includes(requestedMarket);
+          return matchesDistrict && matchesMarket;
+        });
         
-        if (isMarketWideQuery) {
-          console.log('✓ Market-wide query detected - showing current data only');
-        }
-        
-        const hasMatchingCommodity = isMarketWideQuery || (requestedCommodity && formattedData.some(item => 
+        const hasMatchingCommodity = !requestedCommodity || formattedData.some(item => 
           item.commodity.toLowerCase().includes(requestedCommodity) || 
           requestedCommodity.includes(item.commodity.toLowerCase())
-        ));
+        );
         
-        // If no matching commodity found AND it's a commodity-specific query, try historical data
-        if (!hasMatchingCommodity && !isMarketWideQuery) {
-          console.log('No matching commodity in API results, checking historical data...');
+        // If location doesn't match the requested location, check historical data first
+        if (!hasMatchingLocation && requestedDistrict) {
+          console.log(`API returned data but not for ${requestedDistrict}. Checking historical data...`);
           const lastAvailablePrice = await marketPriceCache.getLastAvailablePrice(queryParams);
           
           if (lastAvailablePrice && lastAvailablePrice.data.length > 0) {
-            // Found historical data with matching commodity
+            // Found historical data in Supabase for the specific location
             const historicalData = marketPriceAPI.formatPriceData(lastAvailablePrice.data);
             
+            const location = requestedMarket || requestedDistrict;
             const historicalMessage = queryLanguage === 'hi'
-              ? `आज के लिए ${intent.commodity} का डेटा उपलब्ध नहीं है।\n\nअंतिम उपलब्ध कीमत (${lastAvailablePrice.cacheDate}):`
-              : `Today's data not available for ${intent.commodity}.\n\nShowing last available price (${lastAvailablePrice.cacheDate}):`;
+              ? `${location} में आज का डेटा उपलब्ध नहीं है।\n\nअंतिम उपलब्ध कीमत (${lastAvailablePrice.cacheDate}):`
+              : `Today's data not available for ${location}.\n\nShowing last available price (${lastAvailablePrice.cacheDate}):`;
             
             const responseText = await geminiService.generateResponse(
               historicalData,
@@ -192,43 +222,106 @@ function App() {
               voiceService.speak(historicalMessage + ' ' + responseText, queryLanguage);
             }
             
-            return; // Exit early, don't show wrong commodity data
+            return; // Exit early, show historical data instead of wrong location
           }
+          
+          // No historical data in Supabase - try fetching from API
+          console.log('No historical data in Supabase. Checking data.gov.in API for last 14 days...');
+          const apiHistoricalData = await marketPriceAPI.fetchHistoricalPrices(queryParams, 14);
+          
+          if (apiHistoricalData.success && apiHistoricalData.data.length > 0) {
+            // Found historical data from API! Cache it and show to user
+            console.log(`✓ Found historical data from API: ${apiHistoricalData.date} (${apiHistoricalData.daysAgo} days ago)`);
+            
+            const historicalData = marketPriceAPI.formatPriceData(apiHistoricalData.data);
+            
+            // Cache this data in Supabase for future queries
+            await marketPriceCache.set({
+              ...queryParams,
+              date: apiHistoricalData.date
+            }, apiHistoricalData.data);
+            console.log('✓ Cached historical API data in Supabase');
+            
+            const location = requestedMarket || requestedDistrict;
+            const historicalMessage = queryLanguage === 'hi'
+              ? `${location} में आज का डेटा उपलब्ध नहीं है।\n\nअंतिम उपलब्ध कीमत (${apiHistoricalData.date}):`
+              : `Today's data not available for ${location}.\n\nShowing last available price (${apiHistoricalData.date}):`;
+            
+            const responseText = await geminiService.generateResponse(
+              historicalData,
+              text,
+              queryLanguage
+            );
+            
+            const botMessage = {
+              id: Date.now() + 2,
+              type: 'bot',
+              text: historicalMessage + '\n\n' + responseText,
+              timestamp: new Date(),
+              language: queryLanguage,
+              priceData: historicalData.slice(0, 10),
+              isHistoricalData: true
+            };
+            
+            setMessages(prev => [...prev, botMessage]);
+            
+            if (voiceEnabled && isVoice) {
+              voiceService.speak(historicalMessage + ' ' + responseText, queryLanguage);
+            }
+            
+            return; // Exit early, show historical data from API
+          }
+          
+          // No historical data available anywhere (Supabase + API)
+          // Show "no data available" message instead of wrong location data
+          const location = requestedMarket || requestedDistrict;
+          const noDataMessage = queryLanguage === 'hi'
+            ? `क्षमा करें, ${location} में ${intent.commodity} की कीमत उपलब्ध नहीं है।`
+            : `Sorry, ${intent.commodity} prices are not available for ${location}.`;
+          
+          const botMessage = {
+            id: Date.now() + 2,
+            type: 'bot',
+            text: noDataMessage,
+            timestamp: new Date(),
+            language: queryLanguage
+          };
+          
+          setMessages(prev => [...prev, botMessage]);
+          
+          if (voiceEnabled && isVoice) {
+            voiceService.speak(noDataMessage, queryLanguage);
+          }
+          
+          return; // Don't show data from wrong locations
         }
+        
+        // Location matches! Show the data
+        const displayData = formattedData.filter(item => {
+          const matchesDistrict = !requestedDistrict || item.district.toLowerCase().includes(requestedDistrict);
+          const matchesMarket = !requestedMarket || item.market.toLowerCase().includes(requestedMarket);
+          return matchesDistrict && matchesMarket;
+        });
         
         // Generate response using Gemini
         const responseText = await geminiService.generateResponse(
-          formattedData,
+          displayData.length > 0 ? displayData : formattedData,
           text,
           queryLanguage
         );
-
-        // Check if results match the requested location
-        const requestedDistrict = intent.location.district?.toLowerCase();
-        const hasMatchingDistrict = requestedDistrict && formattedData.some(item => 
-          item.district.toLowerCase().includes(requestedDistrict)
-        );
         
-        // Filter to show only matching district if found, otherwise show all
-        const displayData = hasMatchingDistrict 
-          ? formattedData.filter(item => item.district.toLowerCase().includes(requestedDistrict))
-          : formattedData;
-        
-        // Add context message if showing results from different location
-        let contextMessage = '';
-        if (requestedDistrict && !hasMatchingDistrict) {
-          contextMessage = queryLanguage === 'hi'
-            ? `\n\nनोट: ${intent.location.district} में डेटा उपलब्ध नहीं है। अन्य स्थानों से ${intent.commodity} की कीमतें दिखा रहे हैं:`
-            : `\n\nNote: No data available for ${intent.location.district}. Showing ${intent.commodity} prices from other locations:`;
-        }
+        // For market-wide queries, show more results (up to 20), for specific commodity show up to 10
+        const maxResults = !intent.commodity ? 20 : 10;
+        const finalDisplayData = displayData.length > 0 ? displayData : formattedData;
         
         const botMessage = {
           id: Date.now() + 2,
           type: 'bot',
-          text: responseText + contextMessage,
+          text: responseText,
           timestamp: new Date(),
           language: queryLanguage,
-          priceData: displayData.slice(0, 10) // Show up to 10 markets
+          priceData: finalDisplayData.slice(0, maxResults),
+          isMarketOverview: !intent.commodity // Flag for market-wide queries
         };
 
         setMessages(prev => [...prev, botMessage]);
@@ -273,51 +366,29 @@ function App() {
             voiceService.speak(historicalMessage + ' ' + responseText, queryLanguage);
           }
         } else {
-          // No historical data - try to find nearby markets
-          console.log('No historical data found, searching for nearby markets...');
+          // No historical data in Supabase - try fetching from API
+          console.log('No historical data in Supabase. Checking data.gov.in API for last 14 days...');
+          const apiHistoricalData = await marketPriceAPI.fetchHistoricalPrices(queryParams, 14);
           
-          const nearbyMarkets = await geminiService.findNearbyMarkets(
-            intent.location,
-            intent.commodity,
-            10  // Get 10 nearest markets
-          );
-          
-          if (nearbyMarkets && nearbyMarkets.length > 0) {
-            console.log('Trying nearby markets:', nearbyMarkets);
-          
-          // Try searching in nearby markets (district-level search for better results)
-          let foundData = false;
-          let allNearbyData = [];
-          
-          for (const nearbyMarket of nearbyMarkets) {
-            const nearbyParams = {
-              commodity: intent.commodity,
-              district: nearbyMarket,  // Search by district for broader results
-              limit: 50
-            };
+          if (apiHistoricalData.success && apiHistoricalData.data.length > 0) {
+            // Found historical data from API! Cache it and show to user
+            console.log(`✓ Found historical data from API: ${apiHistoricalData.date} (${apiHistoricalData.daysAgo} days ago)`);
             
-            const nearbyResponse = await marketPriceAPI.fetchMarketPrices(nearbyParams);
+            const historicalData = marketPriceAPI.formatPriceData(apiHistoricalData.data);
             
-            if (nearbyResponse.success && nearbyResponse.data.length > 0) {
-              allNearbyData.push(...nearbyResponse.data);
-              
-              // Stop after collecting enough data
-              if (allNearbyData.length >= 10) {
-                break;
-              }
-            }
-          }
-          
-          if (allNearbyData.length > 0) {
-            // Limit to 10 nearest results
-            const formattedData = marketPriceAPI.formatPriceData(allNearbyData.slice(0, 10));
+            // Cache this data in Supabase for future queries
+            await marketPriceCache.set({
+              ...queryParams,
+              date: apiHistoricalData.date
+            }, apiHistoricalData.data);
+            console.log('✓ Cached historical API data in Supabase');
             
-            const nearbyMessage = queryLanguage === 'hi'
-              ? `${intent.location.market || intent.location.district} में ${intent.commodity} के लिए डेटा उपलब्ध नहीं है।\n\nनिकटतम बाजार में कीमतें दिखा रहे हैं:`
-              : `No data available for ${intent.commodity} in ${intent.location.market || intent.location.district}.\n\nShowing prices from nearest markets:`;
+            const historicalMessage = queryLanguage === 'hi'
+              ? `आज के लिए ${intent.commodity} का डेटा उपलब्ध नहीं है।\n\nअंतिम उपलब्ध कीमत (${apiHistoricalData.date}):`
+              : `Today's data not available for ${intent.commodity}.\n\nShowing last available price (${apiHistoricalData.date}):`;
             
             const responseText = await geminiService.generateResponse(
-              formattedData,
+              historicalData,
               text,
               queryLanguage
             );
@@ -325,47 +396,26 @@ function App() {
             const botMessage = {
               id: Date.now() + 2,
               type: 'bot',
-              text: nearbyMessage + '\n\n' + responseText,
+              text: historicalMessage + '\n\n' + responseText,
               timestamp: new Date(),
               language: queryLanguage,
-              priceData: formattedData.slice(0, 10),  // Show up to 10 nearest results
-              isNearbyResult: true
+              priceData: historicalData.slice(0, 10),
+              isHistoricalData: true
             };
             
             setMessages(prev => [...prev, botMessage]);
             
             if (voiceEnabled && isVoice) {
-              voiceService.speak(nearbyMessage + ' ' + responseText, queryLanguage);
+              voiceService.speak(historicalMessage + ' ' + responseText, queryLanguage);
             }
-            
-            foundData = true;
-          }
-          
-          if (!foundData) {
-            // Even nearby markets don't have data
-            const noDataMessage = queryLanguage === 'hi'
-              ? `क्षमा करें, ${intent.location.market || intent.location.district} और आसपास के बाजारों में ${intent.commodity} के लिए कोई डेटा उपलब्ध नहीं है।`
-              : `Sorry, no data available for ${intent.commodity} in ${intent.location.market || intent.location.district} or nearby markets.`;
-            
-            const botMessage = {
-              id: Date.now() + 2,
-              type: 'bot',
-              text: noDataMessage,
-              timestamp: new Date(),
-              language: queryLanguage
-            };
-            
-            setMessages(prev => [...prev, botMessage]);
-            
-            if (voiceEnabled && isVoice) {
-              voiceService.speak(noDataMessage, queryLanguage);
-            }
-          }
           } else {
-            // Couldn't find nearby markets
+            // No historical data available anywhere (Supabase + API) - show no data message
+            console.log('No historical data found anywhere. No data available.');
+            
+            const location = intent.location.market || intent.location.district || intent.location.state;
             const noDataMessage = queryLanguage === 'hi'
-              ? 'क्षमा करें, इस जानकारी के लिए कोई डेटा उपलब्ध नहीं है। कृपया अलग स्थान या फसल के साथ प्रयास करें।'
-              : 'Sorry, no data available for this query. Please try with a different location or commodity.';
+              ? `क्षमा करें, ${location} में ${intent.commodity} की कीमत उपलब्ध नहीं है।`
+              : `Sorry, ${intent.commodity} prices are not available for ${location}.`;
             
             const botMessage = {
               id: Date.now() + 2,
