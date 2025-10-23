@@ -79,11 +79,11 @@ const PriceCard = memo(({ price, isNearbyResult, isHistorical }) => {
       <div className="grid grid-cols-3 gap-3 mb-3">
         <div className="text-center">
           <p className="text-xs text-gray-500 mb-1">Min Price</p>
-          <p className="text-lg font-bold text-red-600">₹{price.minPrice}</p>
+          <p className="text-lg font-bold text-green-600">₹{price.minPrice}</p>
         </div>
         <div className="text-center">
           <p className="text-xs text-gray-500 mb-1">Modal Price</p>
-          <p className="text-lg font-bold text-primary-600">₹{price.modalPrice}</p>
+          <p className="text-lg font-bold text-red-600">₹{price.modalPrice}</p>
         </div>
         <div className="text-center">
           <p className="text-xs text-gray-500 mb-1">Max Price</p>

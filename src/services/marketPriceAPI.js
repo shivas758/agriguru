@@ -104,10 +104,14 @@ class MarketPriceAPI {
       // Broad commodity search will be done later only if needed
       
       if (response.data && response.data.records && response.data.records.length > 0) {
+        // Filter to only include records from the last 30 days
+        const filteredRecords = this.filterLast30Days(response.data.records);
+        console.log(`Filtered to last 30 days: ${response.data.records.length} → ${filteredRecords.length} records`);
+        
         return {
           success: true,
-          data: response.data.records,
-          total: response.data.total || response.data.records.length,
+          data: filteredRecords,
+          total: filteredRecords.length,
           message: 'Data fetched successfully'
         };
       }
@@ -125,6 +129,31 @@ class MarketPriceAPI {
         message: error.message || 'Failed to fetch market prices'
       };
     }
+  }
+
+  filterLast30Days(records) {
+    // Calculate date 30 days ago from today
+    const today = new Date();
+    const thirtyDaysAgo = new Date(today);
+    thirtyDaysAgo.setDate(today.getDate() - 30);
+    
+    return records.filter(record => {
+      const arrivalDate = record.Arrival_Date || record.arrival_date;
+      if (!arrivalDate) return false;
+      
+      // Parse date from DD-MM-YYYY or DD/MM/YYYY format
+      const dateParts = arrivalDate.split(/[-/]/);
+      if (dateParts.length !== 3) return false;
+      
+      const day = parseInt(dateParts[0], 10);
+      const month = parseInt(dateParts[1], 10) - 1; // Month is 0-indexed
+      const year = parseInt(dateParts[2], 10);
+      
+      const recordDate = new Date(year, month, day);
+      
+      // Include only records from the last 30 days
+      return recordDate >= thirtyDaysAgo && recordDate <= today;
+    });
   }
 
   buildFilters(params) {
