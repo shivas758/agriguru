@@ -115,7 +115,7 @@ class GeminiService {
 
   async extractQueryIntent(query, language = 'en') {
     if (!this.model) {
-      return this.basicIntentExtraction(query);
+      return this.fallbackIntentExtraction(query);
     }
 
     try {
@@ -249,7 +249,7 @@ JSON:`;
 
     // Try to extract any location word that might be a city/district/market
     // Remove common words and extract potential location names
-    const commonWords = ['price', 'what', 'is', 'the', 'of', 'in', 'at', 'from', 'today', 'yesterday', 'aaj', 'kal'];
+    const commonWords = ['price', 'prices', 'what', 'is', 'the', 'of', 'in', 'at', 'from', 'today', 'yesterday', 'aaj', 'kal', 'market', 'markets', 'mandi'];
     const words = queryLower.split(/\s+/).filter(word => 
       word.length > 2 && 
       !commonWords.includes(word) && 

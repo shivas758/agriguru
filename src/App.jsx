@@ -321,7 +321,13 @@ function App() {
           timestamp: new Date(),
           language: queryLanguage,
           priceData: finalDisplayData.slice(0, maxResults),
-          isMarketOverview: !intent.commodity // Flag for market-wide queries
+          fullPriceData: !intent.commodity ? finalDisplayData : null, // Full data for image generation
+          isMarketOverview: !intent.commodity, // Flag for market-wide queries
+          marketInfo: !intent.commodity ? {
+            market: intent.location.market,
+            district: intent.location.district,
+            state: intent.location.state
+          } : null
         };
 
         setMessages(prev => [...prev, botMessage]);

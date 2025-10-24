@@ -1,7 +1,8 @@
 import React, { useState, memo } from 'react';
-import { Volume2, User, Bot, MapPin, Package, Calendar, TrendingUp, Navigation, History } from 'lucide-react';
+import { Volume2, User, Bot, MapPin, Package, Calendar, TrendingUp, Navigation, History, Download, Loader2 } from 'lucide-react';
 import voiceService from '../services/voiceService';
 import commodityImageService from '../services/commodityImageService';
+import marketImageService from '../services/marketImageService';
 
 // Helper function to parse DD/MM/YYYY or DD-MM-YYYY format
 const parseDate = (dateStr) => {
@@ -108,12 +109,38 @@ const PriceCard = memo(({ price, isNearbyResult, isHistorical }) => {
 const ChatMessage = ({ message, onSpeak }) => {
   const isUser = message.type === 'user';
   const isNearbyResult = message.isNearbyResult;
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
   const handleSpeak = () => {
     if (onSpeak) {
       onSpeak(message);
     } else {
       voiceService.speak(message.text, message.language || 'en');
+    }
+  };
+
+  const handleDownloadImage = async () => {
+    if (!message.fullPriceData || message.fullPriceData.length === 0) {
+      alert('No price data available to generate image');
+      return;
+    }
+
+    setIsGeneratingImage(true);
+    
+    try {
+      const result = await marketImageService.generateAndDownload(
+        message.fullPriceData,
+        message.marketInfo || {}
+      );
+      
+      if (!result.success) {
+        alert(`Failed to generate image: ${result.message}`);
+      }
+    } catch (error) {
+      console.error('Error downloading market image:', error);
+      alert('Failed to generate image. Please try again.');
+    } finally {
+      setIsGeneratingImage(false);
     }
   };
 
@@ -163,15 +190,43 @@ const ChatMessage = ({ message, onSpeak }) => {
           
           <p className="whitespace-pre-wrap">{message.text}</p>
           
-          {!isUser && message.text && (
-            <button
-              onClick={handleSpeak}
-              className="mt-2 p-1.5 rounded-full hover:bg-gray-200 transition-colors"
-              title="Listen to response"
-            >
-              <Volume2 className="w-4 h-4 text-gray-600" />
-            </button>
-          )}
+          <div className="flex items-center gap-2 mt-2">
+            {!isUser && message.text && (
+              <button
+                onClick={handleSpeak}
+                className="p-1.5 rounded-full hover:bg-gray-200 transition-colors"
+                title="Listen to response"
+              >
+                <Volume2 className="w-4 h-4 text-gray-600" />
+              </button>
+            )}
+            
+            {/* Download button for market-wide queries */}
+            {!isUser && message.isMarketOverview && message.fullPriceData && (
+              <button
+                onClick={handleDownloadImage}
+                disabled={isGeneratingImage}
+                className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
+                  isGeneratingImage 
+                    ? 'bg-gray-300 cursor-not-allowed' 
+                    : 'bg-primary-600 text-white hover:bg-primary-700'
+                }`}
+                title="Download market prices as image"
+              >
+                {isGeneratingImage ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span className="text-sm">Generating...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-4 h-4" />
+                    <span className="text-sm">Download Image</span>
+                  </>
+                )}
+              </button>
+            )}
+          </div>
         </div>
         
         {message.priceData && message.priceData.length > 0 && (

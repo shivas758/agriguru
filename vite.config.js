@@ -3,13 +3,6 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
-  // Handle environment variables gracefully
-  define: {
-    'import.meta.env.VITE_GEMINI_API_KEY': JSON.stringify(process.env.VITE_GEMINI_API_KEY || ''),
-    'import.meta.env.VITE_DATA_GOV_API_KEY': JSON.stringify(process.env.VITE_DATA_GOV_API_KEY || ''),
-    'import.meta.env.VITE_SUPABASE_URL': JSON.stringify(process.env.VITE_SUPABASE_URL || ''),
-    'import.meta.env.VITE_SUPABASE_ANON_KEY': JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY || ''),
-  },
   optimizeDeps: {
     force: true,
     include: ['@google/generative-ai']
