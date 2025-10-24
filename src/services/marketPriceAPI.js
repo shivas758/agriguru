@@ -132,8 +132,10 @@ class MarketPriceAPI {
   }
 
   filterLast30Days(records) {
-    // Calculate date 30 days ago from today
+    // Calculate date 30 days ago from today (normalized to midnight)
     const today = new Date();
+    today.setHours(0, 0, 0, 0); // Set to start of today
+    
     const thirtyDaysAgo = new Date(today);
     thirtyDaysAgo.setDate(today.getDate() - 30);
     
@@ -150,8 +152,10 @@ class MarketPriceAPI {
       const year = parseInt(dateParts[2], 10);
       
       const recordDate = new Date(year, month, day);
+      recordDate.setHours(0, 0, 0, 0); // Normalize to midnight for comparison
       
-      // Include only records from the last 30 days
+      // Include records from last 30 days INCLUDING today
+      // thirtyDaysAgo <= recordDate <= today
       return recordDate >= thirtyDaysAgo && recordDate <= today;
     });
   }
