@@ -27,8 +27,8 @@ class MarketImageService {
       pages.push(priceData.slice(i, i + itemsPerPage));
     }
 
-    // DEBUG: Commented for production
-    // console.log(`Generating ${pages.length} images for ${priceData.length} items`);
+    // DEBUG: Uncommented for debugging
+    console.log(`Generating ${pages.length} images for ${priceData.length} items`);
 
     // Generate each page
     const images = [];

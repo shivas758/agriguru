@@ -56,33 +56,33 @@ class MarketPriceAPI {
         ...this.buildFilters(params)
       };
 
-      // DEBUG: Commented out for production performance
-      // console.log('Fetching with filters:', queryParams);
+      // DEBUG: Uncommented for debugging
+      console.log('Fetching with filters:', queryParams);
       let response = await axios.get(BASE_URL, { 
         params: queryParams, 
         ...this.axiosConfig 
       });
       
-      // DEBUG: Log the actual API response (commented for production)
-      // console.log('API Response status:', response.status);
-      // console.log('API Response total count:', response.data?.total || 0);
-      // console.log('API Response count:', response.data?.count || 0);
-      // if (response.data && response.data.records) {
-      //   console.log('Number of records returned:', response.data.records.length);
-      //   if (response.data.records.length > 0) {
-      //     console.log('Sample record:', response.data.records[0]);
-      //   } else {
-      //     console.log('⚠️ API returned 0 records. This could mean:');
-      //     console.log('  1. No data available for these filters');
-      //     console.log('  2. Sample API key has limitations');
-      //     console.log('  3. Filter values don\'t match exactly');
-      //   }
-      // }
+      // DEBUG: Uncommented for debugging
+      console.log('API Response status:', response.status);
+      console.log('API Response total count:', response.data?.total || 0);
+      console.log('API Response count:', response.data?.count || 0);
+      if (response.data && response.data.records) {
+        console.log('Number of records returned:', response.data.records.length);
+        if (response.data.records.length > 0) {
+          console.log('Sample record:', response.data.records[0]);
+        } else {
+          console.log('⚠️ API returned 0 records. This could mean:');
+          console.log('  1. No data available for these filters');
+          console.log('  2. Sample API key has limitations');
+          console.log('  3. Filter values don\'t match exactly');
+        }
+      }
       
       // If no results and we have district filter, try without district (search by state only)
       if ((!response.data || !response.data.records || response.data.records.length === 0) && params.district) {
-        // DEBUG: Commented for production
-        // console.log('No results with district filter, trying with state only...');
+        // DEBUG: Uncommented for debugging
+        console.log('No results with district filter, trying with state only...');
         const stateOnlyParams = { ...params };
         delete stateOnlyParams.district;
         delete stateOnlyParams.market;
@@ -100,11 +100,11 @@ class MarketPriceAPI {
           ...this.axiosConfig 
         });
         
-        // DEBUG: Log state-only search results (commented for production)
-        // console.log('State-only search - Number of records:', response.data?.records?.length || 0);
-        // if (response.data?.records?.length > 0) {
-        //   console.log('Sample record from state search:', response.data.records[0]);
-        // }
+        // DEBUG: Uncommented for debugging
+        console.log('State-only search - Number of records:', response.data?.records?.length || 0);
+        if (response.data?.records?.length > 0) {
+          console.log('Sample record from state search:', response.data.records[0]);
+        }
         
         // Filter results client-side to match district name partially
         if (response.data && response.data.records && params.district) {
@@ -122,8 +122,8 @@ class MarketPriceAPI {
       if (response.data && response.data.records && response.data.records.length > 0) {
         // Filter to only include records from the last 30 days
         const filteredRecords = this.filterLast30Days(response.data.records);
-        // DEBUG: Commented for production
-        // console.log(`Filtered to last 30 days: ${response.data.records.length} → ${filteredRecords.length} records`);
+        // DEBUG: Uncommented for debugging
+        console.log(`Filtered to last 30 days: ${response.data.records.length} → ${filteredRecords.length} records`);
         
         return {
           success: true,
@@ -241,8 +241,8 @@ class MarketPriceAPI {
   async fetchHistoricalPrices(params = {}, daysToCheck = 14) {
     // Search for historical data by checking the last N days
     // Optimized: Check multiple dates in parallel batches
-    // DEBUG: Commented for production
-    // console.log(`Searching for historical data in the last ${daysToCheck} days...`);
+    // DEBUG: Uncommented for debugging
+    console.log(`Searching for historical data in the last ${daysToCheck} days...`);
     
     const today = new Date();
     const batchSize = 7; // Check 7 days at a time in parallel
@@ -265,8 +265,8 @@ class MarketPriceAPI {
     // Process in batches
     for (let batchStart = 0; batchStart < datesToCheck.length; batchStart += batchSize) {
       const batch = datesToCheck.slice(batchStart, batchStart + batchSize);
-      // DEBUG: Commented for production
-      // console.log(`Checking batch: ${batch.map(d => d.dateStr).join(', ')}`);
+      // DEBUG: Uncommented for debugging
+      console.log(`Checking batch: ${batch.map(d => d.dateStr).join(', ')}`);
       
       // Fetch all dates in this batch in parallel
       const promises = batch.map(({ dateStr, daysAgo }) => {
@@ -285,8 +285,8 @@ class MarketPriceAPI {
       // Find first successful result (closest date)
       for (const { response, dateStr, daysAgo } of results) {
         if (response.success && response.data.length > 0) {
-          // DEBUG: Commented for production
-          // console.log(`✓ Found historical data from ${dateStr} (${daysAgo} days ago)`);
+          // DEBUG: Uncommented for debugging
+          console.log(`✓ Found historical data from ${dateStr} (${daysAgo} days ago)`);
           return {
             success: true,
             data: response.data,
@@ -299,8 +299,8 @@ class MarketPriceAPI {
     }
     
     // No historical data found in the last N days
-    // DEBUG: Commented for production
-    // console.log(`✗ No historical data found in the last ${daysToCheck} days`);
+    // DEBUG: Uncommented for debugging
+    console.log(`✗ No historical data found in the last ${daysToCheck} days`);
     return {
       success: false,
       data: [],
@@ -377,6 +377,15 @@ class MarketPriceAPI {
       modalPrice: parseFloat(record.Modal_Price || record.modal_price) || 0,
       arrivalDate: record.Arrival_Date || record.arrival_date,
       grade: record.Grade || record.grade || 'N/A',
+      // Capture arrival quantity for trading volume - API may have fields like:
+      // Arrivals_in_Quintal, arrivals, Arrivals, etc.
+      arrivalQuantity: parseFloat(
+        record.Arrivals_in_Quintal || 
+        record.arrivals_in_quintal ||
+        record.Arrivals || 
+        record.arrivals ||
+        0
+      ),
       unit: 'Quintal' // Usually prices are per quintal
     }));
   }

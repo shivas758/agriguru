@@ -82,8 +82,8 @@ function App() {
 
       // Extract intent from query
       const intent = await geminiService.extractQueryIntent(text, queryLanguage);
-      // DEBUG: Commented for production
-      // console.log('Extracted intent:', JSON.stringify(intent, null, 2));
+      // DEBUG: Uncommented for debugging
+      console.log('Extracted intent:', JSON.stringify(intent, null, 2));
       
       // Handle non-agriculture queries
       if (intent.queryType === 'non_agriculture') {
@@ -111,8 +111,8 @@ function App() {
       
       // Handle general agriculture queries (not market prices)
       if (intent.queryType === 'general_agriculture') {
-        // DEBUG: Commented for production
-        // console.log('General agriculture question detected, querying Gemini...');
+        // DEBUG: Uncommented for debugging
+        console.log('General agriculture question detected, querying Gemini...');
         
         const answer = await geminiService.answerAgricultureQuestion(text, queryLanguage);
         
@@ -167,8 +167,8 @@ function App() {
           intent.location.district,
           intent.location.state
         );
-        // DEBUG: Commented for production
-        // console.log('District variations:', districtVariations);
+        // DEBUG: Uncommented for debugging
+        console.log('District variations:', districtVariations);
       }
 
       // Fetch market prices based on intent
@@ -184,19 +184,19 @@ function App() {
       // For market-wide queries, remove commodity filter
       if (!intent.commodity) {
         delete queryParams.commodity;
-        // DEBUG: Commented for production
-        // console.log('Market-wide query detected - fetching all commodities');
+        // DEBUG: Uncommented for debugging
+        console.log('Market-wide query detected - fetching all commodities');
       }
-      // DEBUG: Commented for production
-      // console.log('Query parameters for API:', JSON.stringify(queryParams, null, 2));
+      // DEBUG: Uncommented for debugging
+      console.log('Query parameters for API:', JSON.stringify(queryParams, null, 2));
 
       // Try with district variations if available - using cache
       const response = await marketPriceCache.fetchMarketPricesWithCache(
         queryParams,
         districtVariations
       );
-      // DEBUG: Commented for production
-      // console.log('API response:', response.success ? `${response.data.length} records found` : 'No data');
+      // DEBUG: Uncommented for debugging
+      console.log('API response:', response.success ? `${response.data.length} records found` : 'No data');
       
       if (response.success && response.data.length > 0) {
         let formattedData = marketPriceAPI.formatPriceData(response.data);
@@ -222,8 +222,27 @@ function App() {
         
         // Convert back to array - now has only latest price per commodity
         formattedData = Array.from(latestPrices.values());
-        // DEBUG: Commented for production
-        // console.log(`Filtered to ${formattedData.length} unique latest prices`);
+        
+        // For market-wide queries, sort by arrival quantity (trading volume) in descending order
+        // This shows the most-traded commodities first
+        if (!intent.commodity) {
+          formattedData.sort((a, b) => {
+            const quantityA = a.arrivalQuantity || 0;
+            const quantityB = b.arrivalQuantity || 0;
+            return quantityB - quantityA; // Descending order (highest volume first)
+          });
+          console.log('Market-wide query: Sorted by arrival quantity (trading volume)');
+          // Log top 5 commodities by volume for debugging
+          if (formattedData.length > 0) {
+            console.log('Top 5 commodities by trading volume:');
+            formattedData.slice(0, 5).forEach((item, idx) => {
+              console.log(`  ${idx + 1}. ${item.commodity}: ${item.arrivalQuantity || 'N/A'} quintals`);
+            });
+          }
+        }
+        
+        // DEBUG: Uncommented for debugging
+        console.log(`Filtered to ${formattedData.length} unique latest prices`);
         
         // Check if results match the requested location (district or market)
         const requestedDistrict = intent.location.district?.toLowerCase();
@@ -243,8 +262,8 @@ function App() {
         
         // If location doesn't match the requested location, check historical data first
         if (!hasMatchingLocation && requestedDistrict) {
-          // DEBUG: Commented for production
-          // console.log(`API returned data but not for ${requestedDistrict}. Checking historical data...`);
+          // DEBUG: Uncommented for debugging
+          console.log(`API returned data but not for ${requestedDistrict}. Checking historical data...`);
           const lastAvailablePrice = await marketPriceCache.getLastAvailablePrice(queryParams);
           
           if (lastAvailablePrice && lastAvailablePrice.data.length > 0) {
@@ -394,8 +413,8 @@ function App() {
         }
       } else {
         // No data found - first try to get last available price from DB
-        // DEBUG: Commented for production
-        // console.log('No data found for today, checking for last available price in DB...');
+        // DEBUG: Uncommented for debugging
+        console.log('No data found for today, checking for last available price in DB...');
         
         const lastAvailablePrice = await marketPriceCache.getLastAvailablePrice(queryParams);
         
@@ -430,14 +449,14 @@ function App() {
           }
         } else {
           // No historical data in Supabase - try fetching from API
-          // DEBUG: Commented for production
-          // console.log('No historical data in Supabase. Checking data.gov.in API for last 14 days...');
+          // DEBUG: Uncommented for debugging
+          console.log('No historical data in Supabase. Checking data.gov.in API for last 14 days...');
           const apiHistoricalData = await marketPriceAPI.fetchHistoricalPrices(queryParams, 14);
           
           if (apiHistoricalData.success && apiHistoricalData.data.length > 0) {
             // Found historical data from API! Cache it and show to user
-            // DEBUG: Commented for production
-            // console.log(`✓ Found historical data from API: ${apiHistoricalData.date} (${apiHistoricalData.daysAgo} days ago)`);
+            // DEBUG: Uncommented for debugging
+            console.log(`✓ Found historical data from API: ${apiHistoricalData.date} (${apiHistoricalData.daysAgo} days ago)`);
             
             const historicalData = marketPriceAPI.formatPriceData(apiHistoricalData.data);
             
