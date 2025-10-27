@@ -7,6 +7,14 @@ const BASE_URL = 'https://api.data.gov.in/resource/35985678-0d79-46b4-9ed6-6f133
 class MarketPriceAPI {
   constructor() {
     this.apiKey = API_KEY;
+    // Configure axios with timeout and optimizations
+    this.axiosConfig = {
+      timeout: 15000, // 15 second timeout
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json'
+      }
+    };
   }
 
   async fetchMarketPricesWithVariations(params = {}, districtVariations = null) {
@@ -48,28 +56,33 @@ class MarketPriceAPI {
         ...this.buildFilters(params)
       };
 
-      console.log('Fetching with filters:', queryParams);
-      let response = await axios.get(BASE_URL, { params: queryParams });
+      // DEBUG: Commented out for production performance
+      // console.log('Fetching with filters:', queryParams);
+      let response = await axios.get(BASE_URL, { 
+        params: queryParams, 
+        ...this.axiosConfig 
+      });
       
-      // DEBUG: Log the actual API response
-      console.log('API Response status:', response.status);
-      console.log('API Response total count:', response.data?.total || 0);
-      console.log('API Response count:', response.data?.count || 0);
-      if (response.data && response.data.records) {
-        console.log('Number of records returned:', response.data.records.length);
-        if (response.data.records.length > 0) {
-          console.log('Sample record:', response.data.records[0]);
-        } else {
-          console.log('⚠️ API returned 0 records. This could mean:');
-          console.log('  1. No data available for these filters');
-          console.log('  2. Sample API key has limitations');
-          console.log('  3. Filter values don\'t match exactly');
-        }
-      }
+      // DEBUG: Log the actual API response (commented for production)
+      // console.log('API Response status:', response.status);
+      // console.log('API Response total count:', response.data?.total || 0);
+      // console.log('API Response count:', response.data?.count || 0);
+      // if (response.data && response.data.records) {
+      //   console.log('Number of records returned:', response.data.records.length);
+      //   if (response.data.records.length > 0) {
+      //     console.log('Sample record:', response.data.records[0]);
+      //   } else {
+      //     console.log('⚠️ API returned 0 records. This could mean:');
+      //     console.log('  1. No data available for these filters');
+      //     console.log('  2. Sample API key has limitations');
+      //     console.log('  3. Filter values don\'t match exactly');
+      //   }
+      // }
       
       // If no results and we have district filter, try without district (search by state only)
       if ((!response.data || !response.data.records || response.data.records.length === 0) && params.district) {
-        console.log('No results with district filter, trying with state only...');
+        // DEBUG: Commented for production
+        // console.log('No results with district filter, trying with state only...');
         const stateOnlyParams = { ...params };
         delete stateOnlyParams.district;
         delete stateOnlyParams.market;
@@ -82,13 +95,16 @@ class MarketPriceAPI {
           ...this.buildFilters(stateOnlyParams)
         };
         
-        response = await axios.get(BASE_URL, { params: queryParams });
+        response = await axios.get(BASE_URL, { 
+          params: queryParams, 
+          ...this.axiosConfig 
+        });
         
-        // DEBUG: Log state-only search results
-        console.log('State-only search - Number of records:', response.data?.records?.length || 0);
-        if (response.data?.records?.length > 0) {
-          console.log('Sample record from state search:', response.data.records[0]);
-        }
+        // DEBUG: Log state-only search results (commented for production)
+        // console.log('State-only search - Number of records:', response.data?.records?.length || 0);
+        // if (response.data?.records?.length > 0) {
+        //   console.log('Sample record from state search:', response.data.records[0]);
+        // }
         
         // Filter results client-side to match district name partially
         if (response.data && response.data.records && params.district) {
@@ -106,7 +122,8 @@ class MarketPriceAPI {
       if (response.data && response.data.records && response.data.records.length > 0) {
         // Filter to only include records from the last 30 days
         const filteredRecords = this.filterLast30Days(response.data.records);
-        console.log(`Filtered to last 30 days: ${response.data.records.length} → ${filteredRecords.length} records`);
+        // DEBUG: Commented for production
+        // console.log(`Filtered to last 30 days: ${response.data.records.length} → ${filteredRecords.length} records`);
         
         return {
           success: true,
@@ -223,12 +240,15 @@ class MarketPriceAPI {
 
   async fetchHistoricalPrices(params = {}, daysToCheck = 14) {
     // Search for historical data by checking the last N days
-    // This is useful when Supabase doesn't have cached historical data
-    console.log(`Searching for historical data in the last ${daysToCheck} days...`);
+    // Optimized: Check multiple dates in parallel batches
+    // DEBUG: Commented for production
+    // console.log(`Searching for historical data in the last ${daysToCheck} days...`);
     
     const today = new Date();
+    const batchSize = 7; // Check 7 days at a time in parallel
     
-    // Try each day going backwards
+    // Generate all dates to check
+    const datesToCheck = [];
     for (let i = 1; i <= daysToCheck; i++) {
       const checkDate = new Date(today);
       checkDate.setDate(today.getDate() - i);
@@ -239,30 +259,48 @@ class MarketPriceAPI {
       const year = checkDate.getFullYear();
       const dateStr = `${day}-${month}-${year}`;
       
-      console.log(`Checking date: ${dateStr} (${i} days ago)`);
+      datesToCheck.push({ dateStr, daysAgo: i });
+    }
+    
+    // Process in batches
+    for (let batchStart = 0; batchStart < datesToCheck.length; batchStart += batchSize) {
+      const batch = datesToCheck.slice(batchStart, batchStart + batchSize);
+      // DEBUG: Commented for production
+      // console.log(`Checking batch: ${batch.map(d => d.dateStr).join(', ')}`);
       
-      // Fetch with specific date
-      const historicalParams = {
-        ...params,
-        date: dateStr
-      };
-      
-      const response = await this.fetchMarketPrices(historicalParams);
-      
-      if (response.success && response.data.length > 0) {
-        console.log(`✓ Found historical data from ${dateStr}`);
-        return {
-          success: true,
-          data: response.data,
+      // Fetch all dates in this batch in parallel
+      const promises = batch.map(({ dateStr, daysAgo }) => {
+        const historicalParams = {
+          ...params,
           date: dateStr,
-          daysAgo: i,
-          message: `Found data from ${dateStr}`
+          limit: 100
         };
+        return this.fetchMarketPrices(historicalParams)
+          .then(response => ({ response, dateStr, daysAgo }))
+          .catch(error => ({ response: { success: false, data: [] }, dateStr, daysAgo }));
+      });
+      
+      const results = await Promise.all(promises);
+      
+      // Find first successful result (closest date)
+      for (const { response, dateStr, daysAgo } of results) {
+        if (response.success && response.data.length > 0) {
+          // DEBUG: Commented for production
+          // console.log(`✓ Found historical data from ${dateStr} (${daysAgo} days ago)`);
+          return {
+            success: true,
+            data: response.data,
+            date: dateStr,
+            daysAgo: daysAgo,
+            message: `Found data from ${dateStr}`
+          };
+        }
       }
     }
     
     // No historical data found in the last N days
-    console.log(`✗ No historical data found in the last ${daysToCheck} days`);
+    // DEBUG: Commented for production
+    // console.log(`✗ No historical data found in the last ${daysToCheck} days`);
     return {
       success: false,
       data: [],

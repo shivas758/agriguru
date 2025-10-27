@@ -110,6 +110,7 @@ const ChatMessage = ({ message, onSpeak }) => {
   const isUser = message.type === 'user';
   const isNearbyResult = message.isNearbyResult;
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [generatedImages, setGeneratedImages] = useState(null);
 
   const handleSpeak = () => {
     if (onSpeak) {
@@ -119,26 +120,29 @@ const ChatMessage = ({ message, onSpeak }) => {
     }
   };
 
-  const handleDownloadImage = async () => {
+  // Auto-generate images for market-wide queries
+  React.useEffect(() => {
+    if (message.isMarketOverview && message.fullPriceData && !generatedImages && !isGeneratingImage) {
+      generateMarketImages();
+    }
+  }, [message]);
+
+  const generateMarketImages = async () => {
     if (!message.fullPriceData || message.fullPriceData.length === 0) {
-      alert('No price data available to generate image');
       return;
     }
 
     setIsGeneratingImage(true);
     
     try {
-      const result = await marketImageService.generateAndDownload(
+      const imageDataUrls = await marketImageService.generateMarketPriceImages(
         message.fullPriceData,
         message.marketInfo || {}
       );
       
-      if (!result.success) {
-        alert(`Failed to generate image: ${result.message}`);
-      }
+      setGeneratedImages(imageDataUrls);
     } catch (error) {
-      console.error('Error downloading market image:', error);
-      alert('Failed to generate image. Please try again.');
+      console.error('Error generating market images:', error);
     } finally {
       setIsGeneratingImage(false);
     }
@@ -200,36 +204,32 @@ const ChatMessage = ({ message, onSpeak }) => {
                 <Volume2 className="w-4 h-4 text-gray-600" />
               </button>
             )}
-            
-            {/* Download button for market-wide queries */}
-            {!isUser && message.isMarketOverview && message.fullPriceData && (
-              <button
-                onClick={handleDownloadImage}
-                disabled={isGeneratingImage}
-                className={`flex items-center gap-2 px-3 py-1.5 rounded-full transition-colors ${
-                  isGeneratingImage 
-                    ? 'bg-gray-300 cursor-not-allowed' 
-                    : 'bg-primary-600 text-white hover:bg-primary-700'
-                }`}
-                title="Download market prices as image"
-              >
-                {isGeneratingImage ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span className="text-sm">Generating...</span>
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    <span className="text-sm">Download Image</span>
-                  </>
-                )}
-              </button>
-            )}
           </div>
         </div>
         
-        {message.priceData && message.priceData.length > 0 && (
+        {/* Show images for market-wide queries, price cards for specific commodity queries */}
+        {message.isMarketOverview && message.fullPriceData ? (
+          <div className="mt-3">
+            {isGeneratingImage ? (
+              <div className="flex items-center justify-center gap-3 py-8 bg-white rounded-lg border border-gray-200">
+                <Loader2 className="w-6 h-6 animate-spin text-primary-600" />
+                <span className="text-gray-600">Generating market price images...</span>
+              </div>
+            ) : generatedImages ? (
+              <div className="space-y-4">
+                {generatedImages.map((imageUrl, index) => (
+                  <div key={index} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                    <img 
+                      src={imageUrl} 
+                      alt={`Market prices page ${index + 1}`}
+                      className="w-full h-auto"
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : message.priceData && message.priceData.length > 0 ? (
           <div className="mt-3">
             {message.priceData.map((price, index) => (
               <PriceCard 
@@ -240,7 +240,7 @@ const ChatMessage = ({ message, onSpeak }) => {
               />
             ))}
           </div>
-        )}
+        ) : null}
         
         {renderDisambiguationOptions()}
         

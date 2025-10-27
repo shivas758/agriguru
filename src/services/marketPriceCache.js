@@ -52,7 +52,8 @@ class MarketPriceCache {
    */
   async getCachedPrices(params) {
     if (!isSupabaseConfigured()) {
-      console.log('Supabase not configured, skipping cache');
+      // DEBUG: Commented for production
+      // console.log('Supabase not configured, skipping cache');
       return null;
     }
 
@@ -60,7 +61,8 @@ class MarketPriceCache {
       const cacheKey = this.generateCacheKey(params);
       const today = this.getTodayDate();
       
-      console.log('Checking cache for key:', cacheKey);
+      // DEBUG: Commented for production
+      // console.log('Checking cache for key:', cacheKey);
 
       // Strategy 1: Try exact match first
       const { data: exactMatch, error: exactError } = await supabase
@@ -71,7 +73,8 @@ class MarketPriceCache {
         .single();
 
       if (exactMatch) {
-        console.log('✓ Exact cache hit! Data from:', exactMatch.cache_date);
+        // DEBUG: Commented for production
+        // console.log('✓ Exact cache hit! Data from:', exactMatch.cache_date);
         return {
           success: true,
           data: exactMatch.price_data,
@@ -86,7 +89,8 @@ class MarketPriceCache {
       // IMPORTANT: Only use this strategy if we're looking for a specific commodity
       // For market-wide queries (no commodity), we should NOT use old cached data
       if (params.commodity && (params.district || params.market)) {
-        console.log('Checking if commodity exists in broader cached results...');
+        // DEBUG: Commented for production
+        // console.log('Checking if commodity exists in broader cached results...');
         
         let query = supabase
           .from('market_price_cache')
@@ -123,8 +127,9 @@ class MarketPriceCache {
             });
 
             if (matchingRecords.length > 0) {
-              console.log(`✓ Found ${matchingRecords.length} matching records in cached data!`);
-              console.log('  From cache entry:', cachedEntry.cache_key, 'Date:', cachedEntry.cache_date);
+              // DEBUG: Commented for production
+              // console.log(`✓ Found ${matchingRecords.length} matching records in cached data!`);
+              // console.log('  From cache entry:', cachedEntry.cache_key, 'Date:', cachedEntry.cache_date);
               return {
                 success: true,
                 data: matchingRecords,
@@ -138,10 +143,12 @@ class MarketPriceCache {
         }
       } else if (!params.commodity) {
         // For market-wide queries without commodity, log that we're skipping Strategy 2
-        console.log('Market-wide query detected - skipping broader cache search to avoid old data');
+        // DEBUG: Commented for production
+        // console.log('Market-wide query detected - skipping broader cache search to avoid old data');
       }
 
-      console.log('✗ Cache miss for key:', cacheKey, 'on date:', today);
+      // DEBUG: Commented for production
+      // console.log('✗ Cache miss for key:', cacheKey, 'on date:', today);
       return null;
     } catch (error) {
       console.error('Error in getCachedPrices:', error);
@@ -155,12 +162,14 @@ class MarketPriceCache {
    */
   async cachePrices(params, priceData) {
     if (!isSupabaseConfigured()) {
-      console.log('Supabase not configured, skipping cache storage');
+      // DEBUG: Commented for production
+      // console.log('Supabase not configured, skipping cache storage');
       return false;
     }
 
     if (!priceData || priceData.length === 0) {
-      console.log('No data to cache');
+      // DEBUG: Commented for production
+      // console.log('No data to cache');
       return false;
     }
 
@@ -186,10 +195,12 @@ class MarketPriceCache {
         });
         
         if (filteredData.length === 0) {
-          console.log('✗ No data matches requested location, skipping cache for specific query');
+          // DEBUG: Commented for production
+          // console.log('✗ No data matches requested location, skipping cache for specific query');
           // Still cache individual combinations below
         } else if (filteredData.length < priceData.length) {
-          console.log(`✓ Filtered data from ${priceData.length} to ${filteredData.length} records matching location`);
+          // DEBUG: Commented for production
+          // console.log(`✓ Filtered data from ${priceData.length} to ${filteredData.length} records matching location`);
         }
       }
 
@@ -197,7 +208,8 @@ class MarketPriceCache {
       const originalCacheKey = this.generateCacheKey(params);
       
       if (filteredData.length > 0) {
-        console.log('Caching data for original query:', originalCacheKey);
+        // DEBUG: Commented for production
+        // console.log('Caching data for original query:', originalCacheKey);
         
         cacheEntries.push({
           cache_key: originalCacheKey,
@@ -259,7 +271,8 @@ class MarketPriceCache {
         }
       }
 
-      console.log(`Caching ${cacheEntries.length} entries (1 original + ${cacheEntries.length - 1} extracted combinations)`);
+      // DEBUG: Commented for production
+      // console.log(`Caching ${cacheEntries.length} entries (1 original + ${cacheEntries.length - 1} extracted combinations)`);
 
       // Batch insert all cache entries
       const { error } = await supabase
@@ -274,7 +287,8 @@ class MarketPriceCache {
         return false;
       }
 
-      console.log('✓ Successfully cached all entries');
+      // DEBUG: Commented for production
+      // console.log('✓ Successfully cached all entries');
       return true;
     } catch (error) {
       console.error('Error in cachePrices:', error);
@@ -379,7 +393,8 @@ class MarketPriceCache {
    */
   async getLastAvailablePrice(params) {
     if (!isSupabaseConfigured()) {
-      console.log('Supabase not configured, cannot fetch last available price');
+      // DEBUG: Commented for production
+      // console.log('Supabase not configured, cannot fetch last available price');
       return null;
     }
 
@@ -388,7 +403,8 @@ class MarketPriceCache {
       
       // Strategy 1: Try exact cache key
       const exactCacheKey = this.generateCacheKey(params);
-      console.log('Fetching last available price for key:', exactCacheKey);
+      // DEBUG: Commented for production
+      // console.log('Fetching last available price for key:', exactCacheKey);
 
       let { data, error } = await supabase
         .from('market_price_cache')
@@ -400,7 +416,8 @@ class MarketPriceCache {
 
       // Strategy 2: Try without market (just commodity + district + state)
       if ((!data || data.length === 0) && params.market) {
-        console.log('Trying without market filter...');
+        // DEBUG: Commented for production
+        // console.log('Trying without market filter...');
         const keyWithoutMarket = this.generateCacheKey({
           commodity: params.commodity,
           state: params.state,
@@ -421,7 +438,8 @@ class MarketPriceCache {
 
       // Strategy 3: Try with just commodity + state
       if ((!data || data.length === 0) && params.district) {
-        console.log('Trying with just commodity + state...');
+        // DEBUG: Commented for production
+        // console.log('Trying with just commodity + state...');
         const keyWithoutDistrict = this.generateCacheKey({
           commodity: params.commodity,
           state: params.state
@@ -441,7 +459,8 @@ class MarketPriceCache {
 
       // Strategy 4: Search in broader cache by filtering price_data
       if ((!data || data.length === 0) && params.commodity) {
-        console.log('Searching in broader cache for matching commodity...');
+        // DEBUG: Commented for production
+        // console.log('Searching in broader cache for matching commodity...');
         
         const result = await supabase
           .from('market_price_cache')
@@ -470,7 +489,8 @@ class MarketPriceCache {
             });
 
             if (matchingRecords.length > 0) {
-              console.log(`✓ Found ${matchingRecords.length} matching records in historical cache from ${entry.cache_date}`);
+              // DEBUG: Commented for production
+              // console.log(`✓ Found ${matchingRecords.length} matching records in historical cache from ${entry.cache_date}`);
               return {
                 success: true,
                 data: matchingRecords,
@@ -486,12 +506,14 @@ class MarketPriceCache {
       }
 
       if (error || !data || data.length === 0) {
-        console.log('No historical data found for this query');
+        // DEBUG: Commented for production
+        // console.log('No historical data found for this query');
         return null;
       }
 
       const historicalEntry = data[0];
-      console.log('✓ Found last available price from:', historicalEntry.cache_date);
+      // DEBUG: Commented for production
+      // console.log('✓ Found last available price from:', historicalEntry.cache_date);
       
       // IMPORTANT: Filter price_data to match the requested location
       // Don't return data from wrong districts/markets
@@ -512,11 +534,13 @@ class MarketPriceCache {
         });
         
         if (filteredData.length === 0) {
-          console.log('✗ Historical data found but not for requested location');
+          // DEBUG: Commented for production
+          // console.log('✗ Historical data found but not for requested location');
           return null;
         }
         
-        console.log(`✓ Filtered to ${filteredData.length} records matching requested location`);
+        // DEBUG: Commented for production
+        // console.log(`✓ Filtered to ${filteredData.length} records matching requested location`);
       }
       
       return {
@@ -549,7 +573,8 @@ class MarketPriceCache {
     }
 
     // Cache miss - fetch from API
-    console.log('Fetching from API...');
+    // DEBUG: Commented for production
+    // console.log('Fetching from API...');
     let response;
     
     if (districtVariations) {

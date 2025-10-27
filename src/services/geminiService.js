@@ -6,8 +6,9 @@ const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 class GeminiService {
   constructor() {
     if (API_KEY) {
-      console.log('Gemini API key found, initializing...');
-      console.log('API Key (first 10 chars):', API_KEY.substring(0, 10) + '...');
+      // DEBUG: Commented for production
+      // console.log('Gemini API key found, initializing...');
+      // console.log('API Key (first 10 chars):', API_KEY.substring(0, 10) + '...');
       try {
         this.genAI = new GoogleGenerativeAI(API_KEY);
         // Use gemini-2.5-flash - stable version with excellent performance
@@ -20,7 +21,8 @@ class GeminiService {
             maxOutputTokens: 8192,
           }
         });
-        console.log('Gemini service initialized successfully');
+        // DEBUG: Commented for production
+        // console.log('Gemini service initialized successfully');
       } catch (error) {
         console.error('Error initializing Gemini service:', error);
         console.error('Error details:', error.message);
@@ -38,6 +40,31 @@ class GeminiService {
     }
 
     try {
+      // Quick pattern-based detection to avoid API call for obvious cases
+      const hindiPattern = /[\u0900-\u097F]/;
+      const tamilPattern = /[\u0B80-\u0BFF]/;
+      const teluguPattern = /[\u0C00-\u0C7F]/;
+      const kannadaPattern = /[\u0C80-\u0CFF]/;
+      const malayalamPattern = /[\u0D00-\u0D7F]/;
+      const gujaratiPattern = /[\u0A80-\u0AFF]/;
+      const bengaliPattern = /[\u0980-\u09FF]/;
+      
+      // If contains Indic script, identify which one
+      if (hindiPattern.test(text)) return { language: 'hi', confidence: 0.95 };
+      if (tamilPattern.test(text)) return { language: 'ta', confidence: 0.95 };
+      if (teluguPattern.test(text)) return { language: 'te', confidence: 0.95 };
+      if (kannadaPattern.test(text)) return { language: 'kn', confidence: 0.95 };
+      if (malayalamPattern.test(text)) return { language: 'ml', confidence: 0.95 };
+      if (gujaratiPattern.test(text)) return { language: 'gu', confidence: 0.95 };
+      if (bengaliPattern.test(text)) return { language: 'bn', confidence: 0.95 };
+      
+      // If text is all English alphabet, numbers and common punctuation
+      const englishOnlyPattern = /^[a-zA-Z0-9\s.,?!'"-]+$/;
+      if (englishOnlyPattern.test(text)) {
+        return { language: 'en', confidence: 0.95 };
+      }
+      
+      // For mixed or uncertain cases, use API (rare)
       const prompt = `
         Detect the language of the following text and return ONLY the language code.
         Common Indian language codes: hi (Hindi), ta (Tamil), te (Telugu), kn (Kannada), 
@@ -59,15 +86,7 @@ class GeminiService {
     } catch (error) {
       console.error('Error detecting language:', error);
       console.error('Error details:', error.message, error.stack);
-      // Fallback to basic detection
-      const hindiPattern = /[\u0900-\u097F]/;
-      const tamilPattern = /[\u0B80-\u0BFF]/;
-      const teluguPattern = /[\u0C00-\u0C7F]/;
-      
-      if (hindiPattern.test(text)) return { language: 'hi', confidence: 0.7 };
-      if (tamilPattern.test(text)) return { language: 'ta', confidence: 0.7 };
-      if (teluguPattern.test(text)) return { language: 'te', confidence: 0.7 };
-      
+      // Fallback to English
       return { language: 'en', confidence: 0.5 };
     }
   }
@@ -120,12 +139,38 @@ class GeminiService {
 
     try {
       const prompt = `
-You are an agricultural market price assistant for India with deep knowledge of Indian geography.
+You are an agricultural assistant for India. Your primary role is market prices, but you can also answer general agriculture questions.
 
 Query: "${query}"
 Language: ${language}
 
-Extract information and return ONLY a JSON object:
+FIRST, categorize the query into ONE of these categories:
+1. "non_agriculture" - Questions completely unrelated to agriculture/farming (sports, politics, movies, weather, etc.)
+2. "general_agriculture" - Agriculture-related questions but NOT about market prices (farming techniques, crop diseases, soil health, irrigation, best practices, etc.)
+3. "price_inquiry" - Asking for specific commodity price
+4. "market_overview" - Asking for all/multiple commodity prices in a market
+
+Then return ONLY a JSON object based on the category:
+
+FOR NON-AGRICULTURE QUERIES:
+{
+  "queryType": "non_agriculture",
+  "commodity": null,
+  "location": { "market": null, "district": null, "state": null },
+  "date": null,
+  "needsDisambiguation": false
+}
+
+FOR GENERAL AGRICULTURE QUERIES:
+{
+  "queryType": "general_agriculture",
+  "commodity": null,
+  "location": { "market": null, "district": null, "state": null },
+  "date": null,
+  "needsDisambiguation": false
+}
+
+FOR MARKET PRICE QUERIES (price_inquiry or market_overview):
 {
   "commodity": "exact commodity name as user mentioned, OR null if asking for all commodities",
   "location": {
@@ -138,31 +183,21 @@ Extract information and return ONLY a JSON object:
   "needsDisambiguation": false
 }
 
-CRITICAL INSTRUCTIONS:
-1. If user mentions a MARKET or CITY name (like "Adoni", "Hyderabad", "Kurnool"):
-   - Identify which DISTRICT it belongs to
-   - Identify which STATE it belongs to
-   - Fill in all three: market, district, state
+EXAMPLES:
+- "What is the capital of France?" → queryType: "non_agriculture"
+- "Who won the cricket match?" → queryType: "non_agriculture"
+- "How to control pest in tomato plants?" → queryType: "general_agriculture"
+- "Best time to sow wheat?" → queryType: "general_agriculture"
+- "What are the benefits of organic farming?" → queryType: "general_agriculture"
+- "tomato price in Adoni" → commodity: "tomato", market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", queryType: "price_inquiry"
+- "Pattikonda market prices" → commodity: null, market: "Pattikonda", district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview"
 
-2. If user mentions only DISTRICT (like "Chittoor"):
-   - Identify which STATE it belongs to
-   - Fill in: district and state
+CRITICAL FOR MARKET PRICE QUERIES:
+- Infer district and state from market/city names using your geography knowledge
+- Return commodity name EXACTLY as user mentioned
+- Set commodity to null for market-wide queries
 
-3. Examples:
-   - "tomato price in Adoni" → commodity: "tomato", market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", queryType: "price_inquiry"
-   - "paddy in Chittoor" → commodity: "paddy", district: "Chittoor", state: "Andhra Pradesh", queryType: "price_inquiry"
-   - "rice in Hyderabad" → commodity: "rice", market: "Hyderabad", district: "Hyderabad", state: "Telangana", queryType: "price_inquiry"
-   - "Pattikonda market prices" → commodity: null, market: "Pattikonda", district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview"
-   - "all commodities in Adoni" → commodity: null, market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview"
-   - "today's prices in Kurnool" → commodity: null, district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview"
-
-4. Market-wide queries: If user asks for "market prices", "all commodities", "today's prices" without specifying a commodity:
-   - Set commodity to null
-   - Set queryType to "market_overview"
-   
-5. Use your knowledge of Indian geography to infer locations
-6. Return the commodity name EXACTLY as user mentioned (don't change it)
-7. Return ONLY the JSON object, no other text
+Return ONLY the JSON object, no other text.
 
 JSON:`;
 
@@ -170,13 +205,15 @@ JSON:`;
       const response = await result.response;
       const text = response.text();
       
-      console.log('Gemini raw response:', text);
+      // DEBUG: Commented for production
+      // console.log('Gemini raw response:', text);
       
       // Extract JSON from response
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const intent = JSON.parse(jsonMatch[0]);
-        console.log('Parsed intent from Gemini:', intent);
+        // DEBUG: Commented for production
+        // console.log('Parsed intent from Gemini:', intent);
         return intent;
       }
       
@@ -184,13 +221,24 @@ JSON:`;
     } catch (error) {
       console.error('Error extracting intent:', error);
       console.error('Intent extraction error details:', error.message);
-      console.log('Falling back to basic intent extraction');
+      // DEBUG: Commented for production
+      // console.log('Falling back to basic intent extraction');
       return this.fallbackIntentExtraction(query);
     }
   }
 
   fallbackIntentExtraction(query) {
     const queryLower = query.toLowerCase();
+    
+    // Check for price-related keywords
+    const priceKeywords = ['price', 'prices', 'rate', 'rates', 'cost', 'mandi', 'market', 'bhav', 'daam'];
+    const hasPriceKeyword = priceKeywords.some(keyword => queryLower.includes(keyword));
+    
+    // Check for agriculture-related keywords (non-price)
+    const agriKeywords = ['farming', 'crop', 'soil', 'pest', 'disease', 'irrigation', 'fertilizer', 
+                          'seed', 'harvest', 'planting', 'cultivation', 'grow', 'kheti', 'fasal'];
+    const hasAgriKeyword = agriKeywords.some(keyword => queryLower.includes(keyword));
+    
     const intent = {
       commodity: null,
       location: {
@@ -199,7 +247,7 @@ JSON:`;
         state: null
       },
       date: null,
-      queryType: 'price_inquiry',
+      queryType: hasPriceKeyword ? 'price_inquiry' : (hasAgriKeyword ? 'general_agriculture' : 'price_inquiry'),
       needsDisambiguation: false
     };
 
@@ -348,13 +396,15 @@ Return ONLY the JSON array, no other text.`;
       const response = await result.response;
       const text = response.text().trim();
       
-      console.log('District variations response:', text);
+      // DEBUG: Commented for production
+      // console.log('District variations response:', text);
       
       // Extract JSON array
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const variations = JSON.parse(jsonMatch[0]);
-        console.log(`District variations for ${district}: ${variations.join(', ')}`);
+        // DEBUG: Commented for production
+        // console.log(`District variations for ${district}: ${variations.join(', ')}`);
         return variations;
       }
       
@@ -401,7 +451,8 @@ Return ONLY the JSON array, no other text.`;
       const response = await result.response;
       const text = response.text().trim();
       
-      console.log('Nearby markets suggestion:', text);
+      // DEBUG: Commented for production
+      // console.log('Nearby markets suggestion:', text);
       
       // Extract JSON array
       const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -414,6 +465,61 @@ Return ONLY the JSON array, no other text.`;
     } catch (error) {
       console.error('Error finding nearby markets:', error);
       return null;
+    }
+  }
+
+  async answerAgricultureQuestion(query, language = 'en') {
+    if (!this.model) {
+      return language === 'hi'
+        ? 'क्षमा करें, मैं अभी इस सवाल का जवाब नहीं दे सकता।'
+        : 'Sorry, I cannot answer this question at the moment.';
+    }
+
+    try {
+      const languageNames = {
+        'en': 'English',
+        'hi': 'Hindi',
+        'ta': 'Tamil',
+        'te': 'Telugu',
+        'kn': 'Kannada',
+        'ml': 'Malayalam',
+        'mr': 'Marathi',
+        'gu': 'Gujarati',
+        'pa': 'Punjabi',
+        'bn': 'Bengali',
+        'or': 'Odia',
+        'as': 'Assamese'
+      };
+
+      const targetLang = languageNames[language] || 'English';
+
+      const prompt = `
+You are AgriGuru, an expert agricultural assistant for Indian farmers.
+
+User Question: "${query}"
+Language: ${targetLang}
+
+Please provide a helpful, accurate, and practical answer about agriculture in ${targetLang}.
+
+Guidelines:
+1. Focus on agriculture, farming, crops, livestock, soil, irrigation, pests, diseases, etc.
+2. Provide practical advice that Indian farmers can use
+3. Keep the answer concise but informative (2-4 paragraphs maximum)
+4. Use simple language that farmers can understand
+5. Include specific examples or techniques when relevant
+6. If you mention scientific terms, explain them simply
+7. Be supportive and encouraging
+
+Answer:`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      return response.text().trim();
+    } catch (error) {
+      console.error('Error answering agriculture question:', error);
+      return language === 'hi'
+        ? 'क्षमा करें, मैं अभी इस सवाल का जवाब नहीं दे सकता। कृपया बाद में पुनः प्रयास करें।'
+        : 'Sorry, I cannot answer this question at the moment. Please try again later.';
     }
   }
 
@@ -437,7 +543,8 @@ Return ONLY the JSON array, no other text.`;
   async processVoiceQuery(audioBlob, language = 'hi') {
     // This would integrate with speech-to-text service
     // For now, returning a placeholder
-    console.log('Processing voice query in language:', language);
+    // DEBUG: Commented for production
+    // console.log('Processing voice query in language:', language);
     return {
       text: 'Voice processing will be integrated with speech-to-text API',
       language: language
