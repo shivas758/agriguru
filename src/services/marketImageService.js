@@ -3,6 +3,8 @@
  * Uses HTML5 Canvas API to create images showing all commodity prices
  */
 
+import commodityImageService from './commodityImageService';
+
 class MarketImageService {
   constructor() {
     this.canvas = null;
@@ -16,7 +18,7 @@ class MarketImageService {
    * @param {number} itemsPerPage - Number of items per image (default: 10)
    * @returns {Promise<Array>} - Array of Base64 image data URLs
    */
-  async generateMarketPriceImages(priceData, marketInfo = {}, itemsPerPage = 10) {
+  async generateMarketPriceImages(priceData, marketInfo = {}, itemsPerPage = 8) {
     if (!priceData || priceData.length === 0) {
       throw new Error('No price data available to generate image');
     }
@@ -60,10 +62,10 @@ class MarketImageService {
     const ctx = canvas.getContext('2d');
 
     // Calculate canvas dimensions based on number of items
-    const itemHeight = 110; // Reduced height per commodity item
-    const headerHeight = 120; // Reduced header height
+    const itemHeight = 120; // Height per commodity item with larger fonts
+    const headerHeight = 120;
     const footerHeight = 60;
-    const padding = 20; // Reduced padding
+    const padding = 15; // Reduced padding for more content space
     const canvasWidth = 1200;
     const canvasHeight = headerHeight + (priceData.length * itemHeight) + footerHeight + (padding * 2);
 
@@ -77,12 +79,12 @@ class MarketImageService {
     // Header section
     this.drawHeader(ctx, marketInfo, padding, canvasWidth, pageNumber, totalPages);
 
-    // Draw each commodity price card
+    // Draw each commodity price card (async to load images)
     let yPosition = headerHeight + padding;
-    priceData.forEach((price, index) => {
-      this.drawPriceCard(ctx, price, padding, yPosition, canvasWidth - (padding * 2), index);
+    for (let index = 0; index < priceData.length; index++) {
+      await this.drawPriceCard(ctx, priceData[index], padding, yPosition, canvasWidth - (padding * 2), index);
       yPosition += itemHeight;
-    });
+    }
 
     // Footer
     this.drawFooter(ctx, yPosition, canvasWidth, canvasHeight);
@@ -115,7 +117,7 @@ class MarketImageService {
     
     // Logo text
     ctx.fillStyle = '#0891b2';
-    ctx.font = 'bold 20px Arial, sans-serif';
+    ctx.font = 'bold 24px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText('AG', logoX, logoY + 7);
 
@@ -126,12 +128,12 @@ class MarketImageService {
       : marketInfo.state || '';
     
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 28px Arial, sans-serif';
+    ctx.font = 'bold 36px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(marketName, canvasWidth / 2, 45);
 
     if (location) {
-      ctx.font = '16px Arial, sans-serif';
+      ctx.font = '20px Arial, sans-serif';
       ctx.fillStyle = '#e0f2fe';
       ctx.fillText(location, canvasWidth / 2, 70);
     }
@@ -154,13 +156,13 @@ class MarketImageService {
     
     // Date text (split into lines)
     ctx.fillStyle = '#0891b2';
-    ctx.font = 'bold 14px Arial, sans-serif';
+    ctx.font = 'bold 16px Arial, sans-serif';
     ctx.textAlign = 'center';
     const dateParts = today.split(' ');
     if (dateParts.length >= 3) {
       ctx.fillText(dateParts[0], dateX, dateY - 8); // Day
       ctx.fillText(dateParts[1], dateX, dateY + 6); // Month
-      ctx.font = '11px Arial, sans-serif';
+      ctx.font = '13px Arial, sans-serif';
       ctx.fillText(dateParts[2], dateX, dateY + 18); // Year
     } else {
       ctx.fillText(today, dateX, dateY + 5);
@@ -169,7 +171,7 @@ class MarketImageService {
     // Page number (if multiple pages)
     if (totalPages > 1) {
       ctx.fillStyle = '#ffffff';
-      ctx.font = '14px Arial, sans-serif';
+      ctx.font = '16px Arial, sans-serif';
       ctx.textAlign = 'center';
       ctx.fillText(`Page ${pageNumber} of ${totalPages}`, canvasWidth / 2, 92);
     }
@@ -178,8 +180,8 @@ class MarketImageService {
   /**
    * Draw individual price card with reduced horizontal spacing
    */
-  drawPriceCard(ctx, price, x, y, width, index) {
-    const cardHeight = 90; // Reduced card height
+  async drawPriceCard(ctx, price, x, y, width, index) {
+    const cardHeight = 100; // Card height for larger fonts
     
     // Alternate background colors
     ctx.fillStyle = index % 2 === 0 ? '#ffffff' : '#f1f5f9';
@@ -190,33 +192,61 @@ class MarketImageService {
     ctx.lineWidth = 1;
     ctx.strokeRect(x, y, width, cardHeight);
 
-    // Left section: Commodity info (reduced width)
+    // Draw commodity image (left side)
+    const imageSize = 70;
+    const imageX = x + 15;
+    const imageY = y + 15;
+    
+    try {
+      const imagePath = commodityImageService.getCommodityImagePath(price.commodity);
+      if (imagePath) {
+        const img = await this.loadImage(imagePath);
+        // Draw rounded rectangle for image background
+        this.drawRoundedRect(ctx, imageX, imageY, imageSize, imageSize, 8);
+        ctx.clip();
+        ctx.drawImage(img, imageX, imageY, imageSize, imageSize);
+        ctx.restore();
+        ctx.save();
+      }
+    } catch (error) {
+      // If image fails to load, draw a placeholder box
+      ctx.fillStyle = '#f1f5f9';
+      this.drawRoundedRect(ctx, imageX, imageY, imageSize, imageSize, 8);
+      ctx.fill();
+      // Draw package icon placeholder (simplified)
+      ctx.strokeStyle = '#64748b';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(imageX + 20, imageY + 20, 30, 30);
+    }
+
+    // Left section: Commodity info (shifted right to accommodate image)
     const leftSectionWidth = width * 0.45; // 45% of width
+    const textStartX = imageX + imageSize + 15; // Start text after image
     
     // Commodity name
     ctx.fillStyle = '#0f172a';
-    ctx.font = 'bold 20px Arial, sans-serif';
+    ctx.font = 'bold 26px Arial, sans-serif';
     ctx.textAlign = 'left';
-    const commodityText = this.truncateText(ctx, price.commodity, leftSectionWidth - 30);
-    ctx.fillText(commodityText, x + 15, y + 28);
+    const commodityText = this.truncateText(ctx, price.commodity, leftSectionWidth - imageSize - 45);
+    ctx.fillText(commodityText, textStartX, y + 28);
 
     // Variety (if available) - inline with reduced space
     if (price.variety && price.variety !== 'N/A') {
-      ctx.font = '14px Arial, sans-serif';
+      ctx.font = '18px Arial, sans-serif';
       ctx.fillStyle = '#64748b';
-      const varietyText = this.truncateText(ctx, `(${price.variety})`, leftSectionWidth - 30);
-      ctx.fillText(varietyText, x + 15, y + 50);
+      const varietyText = this.truncateText(ctx, `(${price.variety})`, leftSectionWidth - imageSize - 45);
+      ctx.fillText(varietyText, textStartX, y + 50);
     }
 
     // Market name
-    ctx.font = '13px Arial, sans-serif';
+    ctx.font = '16px Arial, sans-serif';
     ctx.fillStyle = '#475569';
-    const marketText = this.truncateText(ctx, `${price.market}, ${price.district}`, leftSectionWidth - 30);
-    ctx.fillText(marketText, x + 15, y + 70);
+    const marketText = this.truncateText(ctx, `${price.market}, ${price.district}`, leftSectionWidth - imageSize - 45);
+    ctx.fillText(marketText, textStartX, y + 70);
 
     // Prices section (right side) - closer to commodity info
-    const priceX = x + leftSectionWidth + 20; // Reduced gap
-    const priceSpacing = 130; // Reduced spacing between price boxes
+    const priceX = x + leftSectionWidth + 15; // Minimal gap for more space
+    const priceSpacing = 140; // Spacing between price boxes for larger fonts
     
     // Min Price
     this.drawPriceBox(ctx, 'Min', price.minPrice, priceX, y + 18, '#10b981');
@@ -233,18 +263,18 @@ class MarketImageService {
    */
   drawPriceBox(ctx, label, value, x, y, color) {
     // Label
-    ctx.font = '14px Arial, sans-serif';
+    ctx.font = '18px Arial, sans-serif';
     ctx.fillStyle = '#64748b';
     ctx.textAlign = 'center';
     ctx.fillText(label, x + 60, y);
 
     // Price
-    ctx.font = 'bold 22px Arial, sans-serif';
+    ctx.font = 'bold 28px Arial, sans-serif';
     ctx.fillStyle = color;
     ctx.fillText(`₹${value}`, x + 60, y + 30);
 
     // Unit
-    ctx.font = '12px Arial, sans-serif';
+    ctx.font = '16px Arial, sans-serif';
     ctx.fillStyle = '#94a3b8';
     ctx.fillText('/qtl', x + 60, y + 48);
   }
@@ -258,7 +288,7 @@ class MarketImageService {
     ctx.fillRect(0, canvasHeight - 60, canvasWidth, 60);
 
     // Footer text
-    ctx.font = '14px Arial, sans-serif';
+    ctx.font = '16px Arial, sans-serif';
     ctx.fillStyle = '#64748b';
     ctx.textAlign = 'center';
     ctx.fillText(
@@ -268,7 +298,7 @@ class MarketImageService {
     );
 
     // Disclaimer
-    ctx.font = '12px Arial, sans-serif';
+    ctx.font = '14px Arial, sans-serif';
     ctx.fillStyle = '#94a3b8';
     ctx.fillText(
       'Prices are indicative and subject to market variations',
@@ -299,6 +329,39 @@ class MarketImageService {
     }
     
     return dateStr;
+  }
+
+  /**
+   * Load image from URL
+   * @param {string} src - Image source URL
+   * @returns {Promise<Image>}
+   */
+  loadImage(src) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous'; // Handle CORS if needed
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error(`Failed to load image: ${src}`));
+      img.src = src;
+    });
+  }
+
+  /**
+   * Draw rounded rectangle path
+   */
+  drawRoundedRect(ctx, x, y, width, height, radius) {
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(x + radius, y);
+    ctx.lineTo(x + width - radius, y);
+    ctx.quadraticCurveTo(x + width, y, x + width, y + radius);
+    ctx.lineTo(x + width, y + height - radius);
+    ctx.quadraticCurveTo(x + width, y + height, x + width - radius, y + height);
+    ctx.lineTo(x + radius, y + height);
+    ctx.quadraticCurveTo(x, y + height, x, y + height - radius);
+    ctx.lineTo(x, y + radius);
+    ctx.quadraticCurveTo(x, y, x + radius, y);
+    ctx.closePath();
   }
 
   /**

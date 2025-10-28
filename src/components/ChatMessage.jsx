@@ -180,32 +180,49 @@ const ChatMessage = ({ message, onSpeak }) => {
       )}
       
       <div className={`max-w-[70%] ${isUser ? 'order-1' : 'order-2'}`}>
-        <div className={`rounded-2xl px-4 py-3 ${
-          isUser 
-            ? 'bg-primary-600 text-white' 
-            : 'bg-gray-100 text-gray-900'
-        }`}>
-          {message.isVoice && (
-            <div className="flex items-center gap-2 mb-2">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-              <span className="text-xs opacity-80">Voice message</span>
-            </div>
-          )}
-          
-          <p className="whitespace-pre-wrap">{message.text}</p>
-          
-          <div className="flex items-center gap-2 mt-2">
-            {!isUser && message.text && (
-              <button
-                onClick={handleSpeak}
-                className="p-1.5 rounded-full hover:bg-gray-200 transition-colors"
-                title="Listen to response"
-              >
-                <Volume2 className="w-4 h-4 text-gray-600" />
-              </button>
+        {/* Hide text box for market-wide queries, show only for user messages and specific commodity queries */}
+        {!message.isMarketOverview && (
+          <div className={`rounded-2xl px-4 py-3 ${
+            isUser 
+              ? 'bg-primary-600 text-white' 
+              : 'bg-gray-100 text-gray-900'
+          }`}>
+            {message.isVoice && (
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
+                <span className="text-xs opacity-80">Voice message</span>
+              </div>
             )}
+            
+            <p className="whitespace-pre-wrap">{message.text}</p>
+            
+            <div className="flex items-center gap-2 mt-2">
+              {!isUser && message.text && (
+                <button
+                  onClick={handleSpeak}
+                  className="p-1.5 rounded-full hover:bg-gray-200 transition-colors"
+                  title="Listen to response"
+                >
+                  <Volume2 className="w-4 h-4 text-gray-600" />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
+        
+        {/* Voice control for market-wide queries (for future voice output) */}
+        {message.isMarketOverview && !isUser && message.text && (
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              onClick={handleSpeak}
+              className="flex items-center gap-2 px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors shadow-sm"
+              title="Listen to market overview"
+            >
+              <Volume2 className="w-4 h-4" />
+              <span className="text-sm font-medium">Listen to Overview</span>
+            </button>
+          </div>
+        )}
         
         {/* Show images for market-wide queries, price cards for specific commodity queries */}
         {message.isMarketOverview && message.fullPriceData ? (
