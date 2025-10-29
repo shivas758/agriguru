@@ -1,6 +1,7 @@
 /**
  * Service to generate market price images for download
- * Uses HTML5 Canvas API to create images showing all commodity prices
+ * Uses HTML5 Canvas API to create clean table-based images
+ * Enhanced to match professional market price boards
  */
 
 import commodityImageService from './commodityImageService';
@@ -15,10 +16,10 @@ class MarketImageService {
    * Generate multiple images with market commodity prices (pagination)
    * @param {Array} priceData - Array of price data objects
    * @param {Object} marketInfo - Market information (name, district, state)
-   * @param {number} itemsPerPage - Number of items per image (default: 10)
+   * @param {number} itemsPerPage - Number of items per image (default: 12 for table layout)
    * @returns {Promise<Array>} - Array of Base64 image data URLs
    */
-  async generateMarketPriceImages(priceData, marketInfo = {}, itemsPerPage = 8) {
+  async generateMarketPriceImages(priceData, marketInfo = {}, itemsPerPage = 12) {
     if (!priceData || priceData.length === 0) {
       throw new Error('No price data available to generate image');
     }
@@ -29,7 +30,6 @@ class MarketImageService {
       pages.push(priceData.slice(i, i + itemsPerPage));
     }
 
-    // DEBUG: Uncommented for debugging
     console.log(`Generating ${pages.length} images for ${priceData.length} items`);
 
     // Generate each page
@@ -49,7 +49,7 @@ class MarketImageService {
   }
 
   /**
-   * Generate a single page image with market commodity prices
+   * Generate a single page image with market commodity prices in table format
    * @param {Array} priceData - Array of price data objects for this page
    * @param {Object} marketInfo - Market information (name, district, state)
    * @param {number} pageNumber - Current page number
@@ -61,250 +61,237 @@ class MarketImageService {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
 
-    // Calculate canvas dimensions based on number of items
-    const itemHeight = 120; // Height per commodity item with larger fonts
-    const headerHeight = 120;
-    const footerHeight = 60;
-    const padding = 15; // Reduced padding for more content space
-    const canvasWidth = 1200;
-    const canvasHeight = headerHeight + (priceData.length * itemHeight) + footerHeight + (padding * 2);
+    // Table dimensions
+    const rowHeight = 85;
+    const headerRowHeight = 100;
+    const titleHeight = 130;
+    const footerHeight = 50;
+    const canvasWidth = 1400;
+    const canvasHeight = titleHeight + headerRowHeight + (priceData.length * rowHeight) + footerHeight;
 
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
 
-    // Background
-    ctx.fillStyle = '#f8fafc';
+    // Background - white
+    ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-    // Header section
-    this.drawHeader(ctx, marketInfo, padding, canvasWidth, pageNumber, totalPages);
+    // Draw title section
+    this.drawTitleSection(ctx, marketInfo, canvasWidth);
 
-    // Draw each commodity price card (async to load images)
-    let yPosition = headerHeight + padding;
-    for (let index = 0; index < priceData.length; index++) {
-      await this.drawPriceCard(ctx, priceData[index], padding, yPosition, canvasWidth - (padding * 2), index);
-      yPosition += itemHeight;
-    }
+    // Draw table
+    const tableY = titleHeight;
+    await this.drawTable(ctx, priceData, tableY, canvasWidth);
 
     // Footer
-    this.drawFooter(ctx, yPosition, canvasWidth, canvasHeight);
+    this.drawFooter(ctx, canvasHeight - footerHeight, canvasWidth, canvasHeight, pageNumber, totalPages);
 
     // Convert canvas to image
     return canvas.toDataURL('image/png');
   }
 
   /**
-   * Draw header section with logo, market name (centered), and date
+   * Draw title section with market name and date
    */
-  drawHeader(ctx, marketInfo, padding, canvasWidth, pageNumber = 1, totalPages = 1) {
-    // Gradient background for header
-    const gradient = ctx.createLinearGradient(0, 0, canvasWidth, 0);
-    gradient.addColorStop(0, '#0891b2');
-    gradient.addColorStop(1, '#0e7490');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, canvasWidth, 100);
-
-    // Logo on the left (circular placeholder)
-    const logoSize = 60;
-    const logoX = padding + 20;
-    const logoY = 50;
+  drawTitleSection(ctx, marketInfo, canvasWidth) {
+    const padding = 30;
     
-    // Draw circular logo background
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(logoX, logoY, logoSize / 2, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Logo text
-    ctx.fillStyle = '#0891b2';
-    ctx.font = 'bold 24px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('AG', logoX, logoY + 7);
-
-    // Market name in the center
+    // Market name - centered, large
     const marketName = marketInfo.market || marketInfo.district || 'Market';
     const location = marketInfo.district && marketInfo.state 
       ? `${marketInfo.district}, ${marketInfo.state}` 
       : marketInfo.state || '';
     
-    ctx.fillStyle = '#ffffff';
+    ctx.fillStyle = '#dc2626';
+    ctx.font = 'bold 48px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(`${marketName} Market Price Board`, canvasWidth / 2, 55);
+
+    // Decorative line
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.moveTo(padding, 75);
+    ctx.lineTo(canvasWidth - padding, 75);
+    ctx.stroke();
+
+    // Date - large and prominent
+    const today = new Date();
+    const day = today.getDate();
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+                       'July', 'August', 'September', 'October', 'November', 'December'];
+    const month = monthNames[today.getMonth()];
+    const year = today.getFullYear();
+    
+    ctx.fillStyle = '#1e40af';
     ctx.font = 'bold 36px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(marketName, canvasWidth / 2, 45);
-
-    if (location) {
-      ctx.font = '20px Arial, sans-serif';
-      ctx.fillStyle = '#e0f2fe';
-      ctx.fillText(location, canvasWidth / 2, 70);
-    }
-
-    // Date on the right (same visual weight as logo)
-    const today = new Date().toLocaleDateString('en-IN', {
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric'
-    });
-    
-    const dateX = canvasWidth - padding - 20;
-    const dateY = 50;
-    
-    // Date circle background
-    ctx.fillStyle = '#ffffff';
-    ctx.beginPath();
-    ctx.arc(dateX, dateY, logoSize / 2, 0, Math.PI * 2);
-    ctx.fill();
-    
-    // Date text (split into lines)
-    ctx.fillStyle = '#0891b2';
-    ctx.font = 'bold 16px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    const dateParts = today.split(' ');
-    if (dateParts.length >= 3) {
-      ctx.fillText(dateParts[0], dateX, dateY - 8); // Day
-      ctx.fillText(dateParts[1], dateX, dateY + 6); // Month
-      ctx.font = '13px Arial, sans-serif';
-      ctx.fillText(dateParts[2], dateX, dateY + 18); // Year
-    } else {
-      ctx.fillText(today, dateX, dateY + 5);
-    }
-
-    // Page number (if multiple pages)
-    if (totalPages > 1) {
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '16px Arial, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText(`Page ${pageNumber} of ${totalPages}`, canvasWidth / 2, 92);
-    }
+    ctx.fillText(`${day} ${month} ${year}`, canvasWidth / 2, 115);
   }
 
   /**
-   * Draw individual price card with reduced horizontal spacing
+   * Draw table with commodity prices
    */
-  async drawPriceCard(ctx, price, x, y, width, index) {
-    const cardHeight = 100; // Card height for larger fonts
+  async drawTable(ctx, priceData, startY, canvasWidth) {
+    const padding = 30;
+    const tableWidth = canvasWidth - (padding * 2);
+    const tableX = padding;
     
-    // Alternate background colors
-    ctx.fillStyle = index % 2 === 0 ? '#ffffff' : '#f1f5f9';
-    ctx.fillRect(x, y, width, cardHeight);
-
-    // Border
-    ctx.strokeStyle = '#e2e8f0';
-    ctx.lineWidth = 1;
-    ctx.strokeRect(x, y, width, cardHeight);
-
-    // Draw commodity image (left side)
-    const imageSize = 70;
-    const imageX = x + 15;
-    const imageY = y + 15;
+    // Column widths
+    const imageColWidth = 120;
+    const nameColWidth = 380;
+    const minColWidth = 280;
+    const modalColWidth = 280;
+    const maxColWidth = 280;
+    
+    const headerRowHeight = 100;
+    const rowHeight = 85;
+    
+    // Draw table header
+    let currentY = startY;
+    
+    // Header background
+    ctx.fillStyle = '#dc2626';
+    ctx.fillRect(tableX, currentY, tableWidth, headerRowHeight);
+    
+    // Header borders
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 3;
+    
+    // Draw header cells and text
+    let currentX = tableX;
+    
+    // Empty cell for image column
+    ctx.strokeRect(currentX, currentY, imageColWidth, headerRowHeight);
+    currentX += imageColWidth;
+    
+    // Commodity Name header
+    ctx.strokeRect(currentX, currentY, nameColWidth, headerRowHeight);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = 'bold 32px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('Commodity Name', currentX + nameColWidth / 2, currentY + 60);
+    currentX += nameColWidth;
+    
+    // Min Price header
+    ctx.strokeStyle = '#ffffff';
+    ctx.strokeRect(currentX, currentY, minColWidth, headerRowHeight);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('Minimum Price', currentX + minColWidth / 2, currentY + 60);
+    currentX += minColWidth;
+    
+    // Modal Price header
+    ctx.strokeRect(currentX, currentY, modalColWidth, headerRowHeight);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('Modal Price', currentX + modalColWidth / 2, currentY + 60);
+    currentX += modalColWidth;
+    
+    // Max Price header
+    ctx.strokeRect(currentX, currentY, maxColWidth, headerRowHeight);
+    ctx.fillStyle = '#ffffff';
+    ctx.fillText('Maximum Price', currentX + maxColWidth / 2, currentY + 60);
+    
+    currentY += headerRowHeight;
+    
+    // Draw data rows
+    for (let i = 0; i < priceData.length; i++) {
+      await this.drawTableRow(ctx, priceData[i], tableX, currentY, 
+        imageColWidth, nameColWidth, minColWidth, modalColWidth, maxColWidth, rowHeight, i);
+      currentY += rowHeight;
+    }
+  }
+  
+  /**
+   * Draw a single table row
+   */
+  async drawTableRow(ctx, price, x, y, imageColWidth, nameColWidth, minColWidth, modalColWidth, maxColWidth, rowHeight, index) {
+    // Alternating row colors
+    ctx.fillStyle = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
+    const totalWidth = imageColWidth + nameColWidth + minColWidth + modalColWidth + maxColWidth;
+    ctx.fillRect(x, y, totalWidth, rowHeight);
+    
+    // Row borders
+    ctx.strokeStyle = '#cbd5e1';
+    ctx.lineWidth = 2;
+    
+    let currentX = x;
+    
+    // Image cell
+    ctx.strokeRect(currentX, y, imageColWidth, rowHeight);
+    
+    // Draw commodity image
+    const imageSize = 60;
+    const imageX = currentX + (imageColWidth - imageSize) / 2;
+    const imageY = y + (rowHeight - imageSize) / 2;
     
     try {
       const imagePath = commodityImageService.getCommodityImagePath(price.commodity);
       if (imagePath) {
         const img = await this.loadImage(imagePath);
-        // Draw rounded rectangle for image background
-        this.drawRoundedRect(ctx, imageX, imageY, imageSize, imageSize, 8);
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(imageX + imageSize / 2, imageY + imageSize / 2, imageSize / 2, 0, Math.PI * 2);
         ctx.clip();
         ctx.drawImage(img, imageX, imageY, imageSize, imageSize);
         ctx.restore();
-        ctx.save();
       }
     } catch (error) {
-      // If image fails to load, draw a placeholder box
-      ctx.fillStyle = '#f1f5f9';
-      this.drawRoundedRect(ctx, imageX, imageY, imageSize, imageSize, 8);
+      // Draw placeholder circle
+      ctx.fillStyle = '#e2e8f0';
+      ctx.beginPath();
+      ctx.arc(imageX + imageSize / 2, imageY + imageSize / 2, imageSize / 2, 0, Math.PI * 2);
       ctx.fill();
-      // Draw package icon placeholder (simplified)
-      ctx.strokeStyle = '#64748b';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(imageX + 20, imageY + 20, 30, 30);
     }
-
-    // Left section: Commodity info (shifted right to accommodate image)
-    const leftSectionWidth = width * 0.45; // 45% of width
-    const textStartX = imageX + imageSize + 15; // Start text after image
     
-    // Commodity name
-    ctx.fillStyle = '#0f172a';
-    ctx.font = 'bold 26px Arial, sans-serif';
-    ctx.textAlign = 'left';
-    const commodityText = this.truncateText(ctx, price.commodity, leftSectionWidth - imageSize - 45);
-    ctx.fillText(commodityText, textStartX, y + 28);
-
-    // Variety (if available) - inline with reduced space
-    if (price.variety && price.variety !== 'N/A') {
-      ctx.font = '18px Arial, sans-serif';
-      ctx.fillStyle = '#64748b';
-      const varietyText = this.truncateText(ctx, `(${price.variety})`, leftSectionWidth - imageSize - 45);
-      ctx.fillText(varietyText, textStartX, y + 50);
-    }
-
-    // Market name
-    ctx.font = '16px Arial, sans-serif';
-    ctx.fillStyle = '#475569';
-    const marketText = this.truncateText(ctx, `${price.market}, ${price.district}`, leftSectionWidth - imageSize - 45);
-    ctx.fillText(marketText, textStartX, y + 70);
-
-    // Prices section (right side) - closer to commodity info
-    const priceX = x + leftSectionWidth + 15; // Minimal gap for more space
-    const priceSpacing = 140; // Spacing between price boxes for larger fonts
+    currentX += imageColWidth;
     
-    // Min Price
-    this.drawPriceBox(ctx, 'Min', price.minPrice, priceX, y + 18, '#10b981');
-    
-    // Modal Price
-    this.drawPriceBox(ctx, 'Modal', price.modalPrice, priceX + priceSpacing, y + 18, '#ef4444');
-    
-    // Max Price
-    this.drawPriceBox(ctx, 'Max', price.maxPrice, priceX + priceSpacing * 2, y + 18, '#10b981');
-  }
-
-  /**
-   * Draw price box with label and value
-   */
-  drawPriceBox(ctx, label, value, x, y, color) {
-    // Label
-    ctx.font = '18px Arial, sans-serif';
-    ctx.fillStyle = '#64748b';
+    // Commodity name cell
+    ctx.strokeRect(currentX, y, nameColWidth, rowHeight);
+    ctx.fillStyle = '#dc2626';
+    ctx.font = 'bold 30px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(label, x + 60, y);
-
-    // Price
-    ctx.font = 'bold 28px Arial, sans-serif';
-    ctx.fillStyle = color;
-    ctx.fillText(`₹${value}`, x + 60, y + 30);
-
-    // Unit
-    ctx.font = '16px Arial, sans-serif';
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillText('/qtl', x + 60, y + 48);
+    ctx.fillText(price.commodity, currentX + nameColWidth / 2, y + rowHeight / 2 + 10);
+    currentX += nameColWidth;
+    
+    // Min price cell
+    ctx.strokeRect(currentX, y, minColWidth, rowHeight);
+    ctx.fillStyle = '#059669';
+    ctx.font = 'bold 36px Arial, sans-serif';
+    ctx.fillText(price.minPrice || 'N/A', currentX + minColWidth / 2, y + rowHeight / 2 + 12);
+    currentX += minColWidth;
+    
+    // Modal price cell  
+    ctx.strokeRect(currentX, y, modalColWidth, rowHeight);
+    ctx.fillStyle = '#1e40af';
+    ctx.fillText(price.modalPrice || 'N/A', currentX + modalColWidth / 2, y + rowHeight / 2 + 12);
+    currentX += modalColWidth;
+    
+    // Max price cell
+    ctx.strokeRect(currentX, y, maxColWidth, rowHeight);
+    ctx.fillStyle = '#dc2626';
+    ctx.fillText(price.maxPrice || 'N/A', currentX + maxColWidth / 2, y + rowHeight / 2 + 12);
   }
+
 
   /**
    * Draw footer
    */
-  drawFooter(ctx, y, canvasWidth, canvasHeight) {
-    // Footer background
-    ctx.fillStyle = '#f1f5f9';
-    ctx.fillRect(0, canvasHeight - 60, canvasWidth, 60);
+  drawFooter(ctx, y, canvasWidth, canvasHeight, pageNumber, totalPages) {
+    // Footer background - green
+    ctx.fillStyle = '#059669';
+    ctx.fillRect(0, y, canvasWidth, canvasHeight - y);
 
     // Footer text
-    ctx.font = '16px Arial, sans-serif';
-    ctx.fillStyle = '#64748b';
+    ctx.font = 'bold 24px Arial, sans-serif';
+    ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
-    ctx.fillText(
-      'Generated by AgriGuru - Your Agricultural Market Price Assistant',
-      canvasWidth / 2,
-      canvasHeight - 30
-    );
-
-    // Disclaimer
-    ctx.font = '14px Arial, sans-serif';
-    ctx.fillStyle = '#94a3b8';
-    ctx.fillText(
-      'Prices are indicative and subject to market variations',
-      canvasWidth / 2,
-      canvasHeight - 10
-    );
+    
+    let footerText = 'AgriGuru - Market Price Information';
+    if (totalPages > 1) {
+      footerText += ` (Page ${pageNumber}/${totalPages})`;
+    }
+    
+    ctx.fillText(footerText, canvasWidth / 2, y + 35);
   }
 
   /**

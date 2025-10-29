@@ -3,6 +3,8 @@ import { Volume2, User, Bot, MapPin, Package, Calendar, TrendingUp, Navigation, 
 import voiceService from '../services/voiceService';
 import commodityImageService from '../services/commodityImageService';
 import marketImageService from '../services/marketImageService';
+import marketTrendImageService from '../services/marketTrendImageService';
+import PriceTrendCard from './PriceTrendCard';
 
 // Helper function to parse DD/MM/YYYY or DD-MM-YYYY format
 const parseDate = (dateStr) => {
@@ -38,11 +40,11 @@ const PriceCard = memo(({ price, isNearbyResult, isHistorical }) => {
   const imagePath = commodityImageService.getCommodityImagePath(price.commodity);
 
   return (
-    <div className="bg-white rounded-lg p-4 shadow-sm border border-gray-100 mb-3">
-      <div className="flex items-start justify-between mb-3">
-        <div className="flex items-center gap-3">
+    <div className="bg-white rounded-lg p-3 shadow-sm border border-gray-200 mb-2">
+      <div className="flex items-start justify-between mb-2.5">
+        <div className="flex items-center gap-2.5">
           {/* Commodity Image or Icon */}
-          <div className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex items-center justify-center">
+          <div className="flex-shrink-0 w-10 h-10 rounded-md overflow-hidden bg-gray-50 flex items-center justify-center">
             {imagePath && !imageError ? (
               <img
                 src={imagePath}
@@ -51,11 +53,11 @@ const PriceCard = memo(({ price, isNearbyResult, isHistorical }) => {
                 onError={() => setImageError(true)}
               />
             ) : (
-              <Package className="w-6 h-6 text-primary-600" />
+              <Package className="w-5 h-5 text-primary-600" />
             )}
           </div>
           <div>
-            <h4 className="font-semibold text-gray-900">{price.commodity}</h4>
+            <h4 className="font-medium text-gray-900 text-sm">{price.commodity}</h4>
             {price.variety && price.variety !== 'N/A' && (
               <span className="text-xs text-gray-500">({price.variety})</span>
             )}
@@ -63,13 +65,13 @@ const PriceCard = memo(({ price, isNearbyResult, isHistorical }) => {
         </div>
         <div className="flex flex-col gap-1">
           {isNearbyResult && (
-            <span className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-700 text-xs rounded-full">
+            <span className="flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full">
               <Navigation className="w-3 h-3" />
-              Nearby Market
+              Nearby
             </span>
           )}
           {isHistorical && (
-            <span className="flex items-center gap-1 px-2 py-1 bg-amber-100 text-amber-700 text-xs rounded-full">
+            <span className="flex items-center gap-1 px-2 py-0.5 bg-amber-50 text-amber-700 text-xs rounded-full">
               <History className="w-3 h-3" />
               Historical
             </span>
@@ -77,28 +79,28 @@ const PriceCard = memo(({ price, isNearbyResult, isHistorical }) => {
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-3 mb-3">
+      <div className="grid grid-cols-3 gap-2 mb-2.5">
         <div className="text-center">
-          <p className="text-xs text-gray-500 mb-1">Min Price</p>
-          <p className="text-lg font-bold text-green-600">₹{price.minPrice}</p>
+          <p className="text-xs text-gray-500 mb-0.5">Min</p>
+          <p className="text-base font-semibold text-green-600">₹{price.minPrice}</p>
         </div>
         <div className="text-center">
-          <p className="text-xs text-gray-500 mb-1">Modal Price</p>
-          <p className="text-lg font-bold text-red-600">₹{price.modalPrice}</p>
+          <p className="text-xs text-gray-500 mb-0.5">Modal</p>
+          <p className="text-base font-semibold text-primary-600">₹{price.modalPrice}</p>
         </div>
         <div className="text-center">
-          <p className="text-xs text-gray-500 mb-1">Max Price</p>
-          <p className="text-lg font-bold text-green-600">₹{price.maxPrice}</p>
+          <p className="text-xs text-gray-500 mb-0.5">Max</p>
+          <p className="text-base font-semibold text-green-600">₹{price.maxPrice}</p>
         </div>
       </div>
 
-      <div className="flex items-center gap-4 text-sm text-gray-600">
+      <div className="flex items-center gap-3 text-xs text-gray-500">
         <div className="flex items-center gap-1">
-          <MapPin className="w-4 h-4" />
+          <MapPin className="w-3.5 h-3.5" />
           <span>{price.market}, {price.district}</span>
         </div>
         <div className="flex items-center gap-1">
-          <Calendar className="w-4 h-4" />
+          <Calendar className="w-3.5 h-3.5" />
           <span>{formatDate(price.arrivalDate)}</span>
         </div>
       </div>
@@ -111,6 +113,7 @@ const ChatMessage = ({ message, onSpeak }) => {
   const isNearbyResult = message.isNearbyResult;
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [generatedImages, setGeneratedImages] = useState(null);
+  const [generatedTrendImages, setGeneratedTrendImages] = useState(null);
 
   const handleSpeak = () => {
     if (onSpeak) {
@@ -124,6 +127,13 @@ const ChatMessage = ({ message, onSpeak }) => {
   React.useEffect(() => {
     if (message.isMarketOverview && message.fullPriceData && !generatedImages && !isGeneratingImage) {
       generateMarketImages();
+    }
+  }, [message]);
+
+  // Auto-generate trend images for market-wide trends
+  React.useEffect(() => {
+    if (message.trendsData && !generatedTrendImages && !isGeneratingImage) {
+      generateTrendImages();
     }
   }, [message]);
 
@@ -143,6 +153,27 @@ const ChatMessage = ({ message, onSpeak }) => {
       setGeneratedImages(imageDataUrls);
     } catch (error) {
       console.error('Error generating market images:', error);
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
+
+  const generateTrendImages = async () => {
+    if (!message.trendsData) {
+      return;
+    }
+
+    setIsGeneratingImage(true);
+    
+    try {
+      const imageDataUrls = await marketTrendImageService.generateTrendImages(
+        message.trendsData,
+        message.marketInfo || {}
+      );
+      
+      setGeneratedTrendImages(imageDataUrls);
+    } catch (error) {
+      console.error('Error generating trend images:', error);
     } finally {
       setIsGeneratingImage(false);
     }
@@ -170,43 +201,43 @@ const ChatMessage = ({ message, onSpeak }) => {
   };
 
   return (
-    <div className={`flex gap-3 mb-4 message-animation ${isUser ? 'justify-end' : 'justify-start'}`}>
+    <div className={`flex gap-2.5 mb-5 message-animation ${isUser ? 'justify-end' : 'justify-start'}`}>
       {!isUser && (
-        <div className="flex-shrink-0">
-          <div className="w-8 h-8 rounded-full bg-primary-100 flex items-center justify-center">
-            <Bot className="w-5 h-5 text-primary-600" />
+        <div className="flex-shrink-0 pt-1">
+          <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
+            <Bot className="w-4 h-4 text-gray-700" />
           </div>
         </div>
       )}
       
-      <div className={`max-w-[70%] ${isUser ? 'order-1' : 'order-2'}`}>
+      <div className={`flex-1 ${isUser ? 'max-w-[80%] sm:max-w-[70%]' : ''}`}>
         {/* Hide text box for market-wide queries, show only for user messages and specific commodity queries */}
         {!message.isMarketOverview && (
-          <div className={`rounded-2xl px-4 py-3 ${
+          <div className={`${
             isUser 
-              ? 'bg-primary-600 text-white' 
-              : 'bg-gray-100 text-gray-900'
+              ? 'bg-primary-600 text-white ml-auto rounded-2xl px-3.5 py-2.5' 
+              : 'bg-transparent text-gray-800'
           }`}>
             {message.isVoice && (
-              <div className="flex items-center gap-2 mb-2">
-                <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                <span className="text-xs opacity-80">Voice message</span>
+              <div className="flex items-center gap-1.5 mb-1.5">
+                <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
+                <span className="text-xs opacity-80">Voice</span>
               </div>
             )}
             
-            <p className="whitespace-pre-wrap">{message.text}</p>
+            <p className="whitespace-pre-wrap text-[15px] leading-[1.6]">{message.text}</p>
             
-            <div className="flex items-center gap-2 mt-2">
-              {!isUser && message.text && (
+            {!isUser && message.text && (
+              <div className="flex items-center gap-1 mt-2">
                 <button
                   onClick={handleSpeak}
-                  className="p-1.5 rounded-full hover:bg-gray-200 transition-colors"
+                  className="p-1 rounded-md hover:bg-gray-100 transition-colors"
                   title="Listen to response"
                 >
-                  <Volume2 className="w-4 h-4 text-gray-600" />
+                  <Volume2 className="w-3.5 h-3.5 text-gray-500" />
                 </button>
-              )}
-            </div>
+              </div>
+            )}
           </div>
         )}
         
@@ -215,31 +246,64 @@ const ChatMessage = ({ message, onSpeak }) => {
           <div className="flex items-center gap-2 mb-3">
             <button
               onClick={handleSpeak}
-              className="flex items-center gap-2 px-3 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors shadow-sm"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-xs font-medium"
               title="Listen to market overview"
             >
-              <Volume2 className="w-4 h-4" />
-              <span className="text-sm font-medium">Listen to Overview</span>
+              <Volume2 className="w-3.5 h-3.5" />
+              <span>Listen</span>
             </button>
           </div>
         )}
+        
+        {/* Show trend card for single commodity trend */}
+        {message.trend ? (
+          <div className="mt-3">
+            <PriceTrendCard trend={message.trend} />
+          </div>
+        ) : null}
+        
+        {/* Show trend images for market-wide trends */}
+        {message.trendsData ? (
+          <div className="mt-3">
+            {isGeneratingImage ? (
+              <div className="flex items-center justify-center gap-2.5 py-10 bg-gray-50 rounded-lg border border-gray-200">
+                <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
+                <span className="text-gray-600 text-sm">Generating trend images...</span>
+              </div>
+            ) : generatedTrendImages ? (
+              <div className="space-y-4">
+                {generatedTrendImages.map((imageUrl, index) => (
+                  <div key={index} className="rounded-lg border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
+                    <img 
+                      src={imageUrl} 
+                      alt={`Market trends page ${index + 1}`}
+                      className="w-full h-auto max-w-full"
+                      style={{ display: 'block' }}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
         
         {/* Show images for market-wide queries, price cards for specific commodity queries */}
         {message.isMarketOverview && message.fullPriceData ? (
           <div className="mt-3">
             {isGeneratingImage ? (
-              <div className="flex items-center justify-center gap-3 py-8 bg-white rounded-lg border border-gray-200">
-                <Loader2 className="w-6 h-6 animate-spin text-primary-600" />
-                <span className="text-gray-600">Generating market price images...</span>
+              <div className="flex items-center justify-center gap-2.5 py-10 bg-gray-50 rounded-lg border border-gray-200">
+                <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
+                <span className="text-gray-600 text-sm">Generating images...</span>
               </div>
             ) : generatedImages ? (
               <div className="space-y-4">
                 {generatedImages.map((imageUrl, index) => (
-                  <div key={index} className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+                  <div key={index} className="rounded-lg border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
                     <img 
                       src={imageUrl} 
                       alt={`Market prices page ${index + 1}`}
-                      className="w-full h-auto"
+                      className="w-full h-auto max-w-full"
+                      style={{ display: 'block' }}
                     />
                   </div>
                 ))}
@@ -261,25 +325,27 @@ const ChatMessage = ({ message, onSpeak }) => {
         
         {renderDisambiguationOptions()}
         
-        <div className="flex items-center gap-2 mt-1 px-2">
-          <span className="text-xs text-gray-500">
-            {new Date(message.timestamp).toLocaleTimeString('en-IN', { 
-              hour: '2-digit', 
-              minute: '2-digit' 
-            })}
-          </span>
-          {message.language && message.language !== 'en' && (
-            <span className="text-xs text-gray-500">
-              • {message.language.toUpperCase()}
+        {!isUser && (
+          <div className="flex items-center gap-1.5 mt-1.5 text-xs text-gray-400">
+            <span>
+              {new Date(message.timestamp).toLocaleTimeString('en-IN', { 
+                hour: '2-digit', 
+                minute: '2-digit' 
+              })}
             </span>
-          )}
-        </div>
+            {message.language && message.language !== 'en' && (
+              <span>
+                • {message.language.toUpperCase()}
+              </span>
+            )}
+          </div>
+        )}
       </div>
       
       {isUser && (
-        <div className="flex-shrink-0 order-2">
-          <div className="w-8 h-8 rounded-full bg-gray-300 flex items-center justify-center">
-            <User className="w-5 h-5 text-gray-700" />
+        <div className="flex-shrink-0 pt-1">
+          <div className="w-7 h-7 rounded-full bg-primary-600 flex items-center justify-center">
+            <User className="w-4 h-4 text-white" />
           </div>
         </div>
       )}

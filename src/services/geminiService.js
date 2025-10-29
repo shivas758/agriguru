@@ -147,8 +147,9 @@ Language: ${language}
 FIRST, categorize the query into ONE of these categories:
 1. "non_agriculture" - Questions completely unrelated to agriculture/farming (sports, politics, movies, weather, etc.)
 2. "general_agriculture" - Agriculture-related questions but NOT about market prices (farming techniques, crop diseases, soil health, irrigation, best practices, etc.)
-3. "price_inquiry" - Asking for specific commodity price
-4. "market_overview" - Asking for all/multiple commodity prices in a market
+3. "price_trend" - Asking about price changes, trends, increases, decreases over time (this week, last week, month, etc.)
+4. "price_inquiry" - Asking for specific commodity price
+5. "market_overview" - Asking for all/multiple commodity prices in a market
 
 Then return ONLY a JSON object based on the category:
 
@@ -167,6 +168,20 @@ FOR GENERAL AGRICULTURE QUERIES:
   "commodity": null,
   "location": { "market": null, "district": null, "state": null },
   "date": null,
+  "needsDisambiguation": false
+}
+
+FOR PRICE TREND QUERIES (price_trend):
+{
+  "commodity": "exact commodity name as user mentioned, OR null if asking for market-wide trends",
+  "location": {
+    "market": "market name if mentioned",
+    "district": "district name - INFER from market/city if needed",
+    "state": "state name - INFER from market/city/district if needed"
+  },
+  "date": null,
+  "queryType": "price_trend",
+  "timePeriod": "week, month, or days - extract from query",
   "needsDisambiguation": false
 }
 
@@ -189,6 +204,8 @@ EXAMPLES:
 - "How to control pest in tomato plants?" → queryType: "general_agriculture"
 - "Best time to sow wheat?" → queryType: "general_agriculture"
 - "What are the benefits of organic farming?" → queryType: "general_agriculture"
+- "how much has cotton price changed in adoni this week?" → commodity: "cotton", market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", queryType: "price_trend", timePeriod: "week"
+- "price trends in bangalore market" → commodity: null, market: "Bangalore", district: "Bangalore Urban", state: "Karnataka", queryType: "price_trend", timePeriod: "month"
 - "tomato price in Adoni" → commodity: "tomato", market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", queryType: "price_inquiry"
 - "Pattikonda market prices" → commodity: null, market: "Pattikonda", district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview"
 
@@ -196,6 +213,11 @@ CRITICAL FOR MARKET PRICE QUERIES:
 - Infer district and state from market/city names using your geography knowledge
 - Return commodity name EXACTLY as user mentioned
 - Set commodity to null for market-wide queries
+
+CRITICAL FOR PRICE TREND QUERIES:
+- Look for keywords: "change", "trend", "increase", "decrease", "this week", "last week", "month", etc.
+- Extract timePeriod from query (week, month, or days)
+- Set commodity to null if asking for market-wide price trends
 
 Return ONLY the JSON object, no other text.
 

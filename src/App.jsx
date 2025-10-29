@@ -2,13 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Mic, MicOff, Send, Volume2, VolumeX, Settings, 
   Globe, Loader2, AlertCircle, ChevronDown, TrendingUp,
-  Package, MapPin, Info
+  Package, MapPin, Info, Bot, User
 } from 'lucide-react';
 import ChatMessage from './components/ChatMessage';
+import PriceTrendCard from './components/PriceTrendCard';
 import marketPriceAPI from './services/marketPriceAPI';
 import marketPriceCache from './services/marketPriceCache';
 import geminiService from './services/geminiService';
 import voiceService from './services/voiceService';
+import priceTrendService from './services/priceTrendService';
+import marketTrendImageService from './services/marketTrendImageService';
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -128,6 +131,109 @@ function App() {
         
         if (voiceEnabled && isVoice) {
           voiceService.speak(answer, queryLanguage);
+        }
+        
+        setIsLoading(false);
+        return;
+      }
+      
+      // Handle price trend queries
+      if (intent.queryType === 'price_trend') {
+        console.log('Price trend query detected, fetching historical data...');
+        
+        const trendParams = {
+          commodity: intent.commodity,
+          state: intent.location.state,
+          district: intent.location.district,
+          market: intent.location.market
+        };
+        
+        const trendResult = await priceTrendService.getPriceTrends(trendParams);
+        
+        if (!trendResult.success) {
+          const errorMessage = queryLanguage === 'hi'
+            ? `क्षमा करें, ${trendParams.commodity || 'इस बाजार'} के लिए पर्याप्त ऐतिहासिक डेटा उपलब्ध नहीं है। कीमत ट्रेंड देखने के लिए कम से कम 2 दिनों का डेटा चाहिए।`
+            : `Sorry, not enough historical data available for ${trendParams.commodity || 'this market'}. Need at least 2 days of data for trend analysis.`;
+          
+          const botMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: errorMessage,
+            timestamp: new Date(),
+            language: queryLanguage
+          };
+          
+          setMessages(prev => [...prev, botMessage]);
+          
+          if (voiceEnabled && isVoice) {
+            voiceService.speak(errorMessage, queryLanguage);
+          }
+          
+          setIsLoading(false);
+          return;
+        }
+        
+        // Single commodity trend
+        if (trendResult.type === 'single_commodity') {
+          const marketInfo = {
+            commodity: intent.commodity,
+            market: intent.location.market,
+            district: intent.location.district,
+            state: intent.location.state
+          };
+          
+          const botMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: trendResult.summary,
+            timestamp: new Date(),
+            language: queryLanguage,
+            trend: trendResult.trend,
+            marketInfo: marketInfo
+          };
+          
+          setMessages(prev => [...prev, botMessage]);
+          
+          if (voiceEnabled && isVoice) {
+            voiceService.speak(trendResult.summary, queryLanguage);
+          }
+        }
+        // Market-wide trends
+        else if (trendResult.type === 'market_wide') {
+          const marketInfo = {
+            market: intent.location.market,
+            district: intent.location.district,
+            state: intent.location.state
+          };
+          
+          // Generate trend images
+          console.log('Generating market trend images...');
+          const imageResult = await marketTrendImageService.generateTrendImages(
+            trendResult.trends,
+            marketInfo
+          );
+          
+          const summaryText = queryLanguage === 'hi'
+            ? `${marketInfo.market || marketInfo.district} बाजार के ${trendResult.trends.commodities.length} वस्तुओं के लिए कीमत ट्रेंड (पिछले 30 दिन):`
+            : `Price trends for ${trendResult.trends.commodities.length} commodities in ${marketInfo.market || marketInfo.district} market (last 30 days):`;
+          
+          const botMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: summaryText,
+            timestamp: new Date(),
+            language: queryLanguage,
+            trendImages: imageResult,
+            marketInfo: marketInfo,
+            trendsData: trendResult.trends
+          };
+          
+          setMessages(prev => [...prev, botMessage]);
+          
+          if (voiceEnabled && isVoice) {
+            const voiceText = summaryText;
+            voiceService.speak(voiceText, queryLanguage);
+          }
         }
         
         setIsLoading(false);
@@ -583,30 +689,29 @@ function App() {
 
   return (
     <div className="flex flex-col h-screen bg-gray-50">
-      {/* Header */}
-      <header className="bg-gradient-to-r from-primary-600 to-primary-700 text-white shadow-lg">
-        <div className="px-4 py-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <TrendingUp className="w-8 h-8" />
-              <div>
-                <h1 className="text-xl font-bold">AgriGuru Market Prices</h1>
-                <p className="text-xs text-primary-100">Get market prices in your language</p>
-              </div>
-            </div>
+      {/* Minimal Header */}
+      <header className="sticky top-0 z-10 bg-white border-b border-gray-200">
+        <div className="max-w-3xl mx-auto px-3 sm:px-4">
+          <div className="flex items-center justify-between h-12">
             <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-md bg-primary-600 flex items-center justify-center">
+                <TrendingUp className="w-4 h-4 text-white" />
+              </div>
+              <h1 className="text-base font-semibold text-gray-900">AgriGuru</h1>
+            </div>
+            <div className="flex items-center gap-0.5">
               <button
                 onClick={toggleVoice}
-                className="p-2 rounded-full hover:bg-primary-500 transition-colors"
+                className="p-2 rounded-md hover:bg-gray-100 transition-colors"
                 title={voiceEnabled ? 'Disable voice' : 'Enable voice'}
               >
-                {voiceEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+                {voiceEnabled ? <Volume2 className="w-4 h-4 text-gray-600" /> : <VolumeX className="w-4 h-4 text-gray-600" />}
               </button>
               <button
                 onClick={() => setShowSettings(!showSettings)}
-                className="p-2 rounded-full hover:bg-primary-500 transition-colors"
+                className="p-2 rounded-md hover:bg-gray-100 transition-colors"
               >
-                <Settings className="w-5 h-5" />
+                <Settings className="w-4 h-4 text-gray-600" />
               </button>
             </div>
           </div>
@@ -614,20 +719,22 @@ function App() {
         
         {/* Language selector */}
         {showSettings && (
-          <div className="bg-primary-700 px-4 py-3 border-t border-primary-600">
-            <div className="flex items-center gap-3">
-              <Globe className="w-5 h-5" />
-              <select
-                value={selectedLanguage}
-                onChange={(e) => setSelectedLanguage(e.target.value)}
-                className="bg-primary-600 text-white px-3 py-1.5 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-400"
-              >
-                {availableLanguages.map(lang => (
-                  <option key={lang.code} value={lang.code}>
-                    {lang.nativeName} ({lang.name})
-                  </option>
-                ))}
-              </select>
+          <div className="border-t border-gray-200 bg-gray-50">
+            <div className="max-w-3xl mx-auto px-3 sm:px-4 py-2">
+              <div className="flex items-center gap-2">
+                <Globe className="w-4 h-4 text-gray-500" />
+                <select
+                  value={selectedLanguage}
+                  onChange={(e) => setSelectedLanguage(e.target.value)}
+                  className="bg-white border border-gray-300 text-gray-700 px-2.5 py-1.5 rounded-md focus:outline-none focus:ring-1 focus:ring-primary-500 text-xs"
+                >
+                  {availableLanguages.map(lang => (
+                    <option key={lang.code} value={lang.code}>
+                      {lang.nativeName} ({lang.name})
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
           </div>
         )}
@@ -636,80 +743,104 @@ function App() {
       {/* Chat messages */}
       <div 
         ref={chatContainerRef}
-        className="flex-1 overflow-y-auto p-4 custom-scrollbar"
+        className="flex-1 overflow-y-auto custom-scrollbar"
       >
-        {messages.map(message => (
-          <ChatMessage 
-            key={message.id} 
-            message={message}
-            onSpeak={(msg) => voiceService.speak(msg.text, msg.language)}
-          />
-        ))}
-        
-        {isLoading && (
-          <div className="flex items-center gap-2 text-gray-500 mb-4">
-            <Loader2 className="w-5 h-5 animate-spin" />
-            <span>Getting market prices...</span>
-          </div>
-        )}
-        
-        {interimTranscript && (
-          <div className="flex items-center gap-2 text-gray-500 mb-4 italic">
-            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-            <span>{interimTranscript}</span>
-          </div>
-        )}
-        
-        <div ref={messagesEndRef} />
+        <div className="max-w-3xl mx-auto px-3 sm:px-4 py-4">
+          {messages.map(message => (
+            <ChatMessage 
+              key={message.id} 
+              message={message}
+              onSpeak={(msg) => voiceService.speak(msg.text, msg.language)}
+            />
+          ))}
+          
+          {isLoading && (
+            <div className="flex items-start gap-3 py-3">
+              <div className="flex-shrink-0">
+                <div className="w-7 h-7 rounded-full bg-gray-100 flex items-center justify-center">
+                  <Bot className="w-4 h-4 text-gray-600" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 text-gray-500 pt-1">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="text-sm">Thinking...</span>
+              </div>
+            </div>
+          )}
+          
+          {interimTranscript && (
+            <div className="flex items-start gap-3 py-3 justify-end">
+              <div className="flex items-center gap-2 text-gray-500 italic pt-1">
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                <span className="text-sm">{interimTranscript}</span>
+              </div>
+              <div className="flex-shrink-0">
+                <div className="w-7 h-7 rounded-full bg-primary-600 flex items-center justify-center">
+                  <User className="w-4 h-4 text-white" />
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <div ref={messagesEndRef} />
+        </div>
       </div>
 
       {/* Error display */}
       {error && (
-        <div className="mx-4 mb-2 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2 text-red-700">
-          <AlertCircle className="w-5 h-5 flex-shrink-0" />
-          <span className="text-sm">{error}</span>
-          <button
-            onClick={() => setError('')}
-            className="ml-auto text-red-500 hover:text-red-700"
-          >
-            ×
-          </button>
+        <div className="bg-white border-t border-gray-200">
+          <div className="max-w-3xl mx-auto px-3 sm:px-4 py-2">
+            <div className="p-2.5 bg-red-50 border border-red-200 rounded-md flex items-center gap-2 text-red-700">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              <span className="text-xs">{error}</span>
+              <button
+                onClick={() => setError('')}
+                className="ml-auto text-red-500 hover:text-red-700 text-lg leading-none"
+              >
+                ×
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {/* Input area */}
-      <div className="bg-white border-t border-gray-200 p-4">
-        <div className="max-w-4xl mx-auto">
+      <div className="sticky bottom-0 bg-white border-t border-gray-200">
+        <div className="max-w-3xl mx-auto px-3 sm:px-4 py-3">
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleVoiceInput}
-              disabled={isLoading}
-              className={`p-3 rounded-full transition-all ${
-                isRecording 
-                  ? 'bg-red-500 text-white voice-recording' 
-                  : 'bg-primary-600 text-white hover:bg-primary-700'
-              } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {isRecording ? <MicOff className="w-5 h-5" /> : <Mic className="w-5 h-5" />}
-            </button>
-            
             <div className="flex-1 relative">
-              <input
-                type="text"
+              <textarea
                 value={inputText}
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyPress={handleKeyPress}
                 disabled={isLoading || isRecording}
-                placeholder={isRecording ? "Listening..." : "Type your message or use voice..."}
-                className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-full focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-500"
+                placeholder={isRecording ? "Listening..." : "Message AgriGuru..."}
+                rows="1"
+                className="w-full px-3 py-2.5 pr-20 border border-gray-300 rounded-xl focus:outline-none focus:border-gray-400 disabled:bg-gray-50 disabled:text-gray-400 resize-none max-h-32 text-sm shadow-sm"
+                style={{ minHeight: '44px', lineHeight: '1.5' }}
               />
-              <button
-                onClick={() => handleSendMessage(inputText)}
-                disabled={!inputText.trim() || isLoading || isRecording}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-2 text-primary-600 hover:bg-primary-50 rounded-full transition-colors disabled:text-gray-400 disabled:hover:bg-transparent"
-              >
-                <Send className="w-5 h-5" />
-              </button>
+              <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                <button
+                  onClick={handleVoiceInput}
+                  disabled={isLoading}
+                  className={`p-1.5 rounded-lg transition-all ${
+                    isRecording 
+                      ? 'bg-red-500 text-white voice-recording' 
+                      : 'text-gray-500 hover:bg-gray-100'
+                  } ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title={isRecording ? 'Stop recording' : 'Voice input'}
+                >
+                  {isRecording ? <MicOff className="w-4 h-4" /> : <Mic className="w-4 h-4" />}
+                </button>
+                <button
+                  onClick={() => handleSendMessage(inputText)}
+                  disabled={!inputText.trim() || isLoading || isRecording}
+                  className="p-1.5 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors disabled:bg-gray-200 disabled:text-gray-400 disabled:cursor-not-allowed"
+                  title="Send message"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </div>
             </div>
           </div>
         </div>
