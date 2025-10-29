@@ -238,19 +238,26 @@ const apiData = await marketPriceAPI.fetchHistoricalPrices(params, 14);
 ## 📈 Performance
 
 ### First Query (Cold Start)
-- **Time**: 3-5 seconds
-- **API calls**: 1 (current) + up to 14 (historical check)
-- **Result**: Data cached in Supabase
+- **Time**: 5-10 seconds (fetches all available historical dates)
+- **API calls**: Up to 30 (checks each date, only fetches if data exists)
+- **Data fetched**: Usually 7-14 days (limited by government API)
+- **Result**: All fetched data cached in Supabase for future use
 
 ### Subsequent Queries (Warm)
 - **Time**: <1 second
 - **API calls**: 0 (served from cache)
-- **Result**: Instant trend display
+- **Result**: Instant trend display with more data accumulated
 
 ### Market-Wide Trends
 - **Image generation**: 1-2 seconds
 - **Commodities per image**: 10
 - **Multiple pages**: Auto-paginated
+
+### Building Historical Data
+The app automatically builds a 30-day history over time:
+- Each daily query caches that day's price
+- After 30 days of regular use, you'll have full 30-day trends
+- No manual intervention needed
 
 ## 🚀 Benefits
 
@@ -305,19 +312,33 @@ npm run dev
 "Sorry, not enough historical data available..."
 ```
 
-## ⚠️ Limitations
+## ⚠️ Limitations and Important Notes
 
-1. **Requires Historical Data**
+### 1. **Government API Data Availability**
+**CRITICAL**: The government API (data.gov.in) typically only maintains **7-14 days** of historical data, not the full 30 days.
+
+- **First trend query**: Will fetch all available dates (usually 7-14 days) from the API
+- **Subsequent queries**: Will have more data as the app caches daily prices
+- **Over time**: As you use the app daily, the Supabase cache builds up to 30 days
+
+**Example Timeline:**
+- **Day 1**: First query → 8 days from API → Shows 8-day trend
+- **Day 2**: Second query → 9 days from cache → Shows 9-day trend
+- **Day 30**: Query → 30 days from cache → Shows full 30-day trend ✅
+
+### 2. **Requires Historical Data**
    - Need at least 2 days of data for trend analysis
    - New markets/commodities may not have sufficient data
 
-2. **30-Day Window Only**
+### 3. **30-Day Window**
    - Trends are limited to last 30 days
    - Can be adjusted in configuration
+   - Full 30-day trends require using the app regularly
 
-3. **Data Availability**
-   - Depends on government API having historical data
-   - Some markets may have gaps in data
+### 4. **Data Gaps**
+   - Government API may have gaps (weekends, holidays)
+   - Some markets update irregularly
+   - Trend calculations work with available data
 
 ## 🔮 Future Enhancements
 

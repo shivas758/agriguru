@@ -29,12 +29,19 @@ class PriceTrendService {
 
       // Step 1: Get data from Supabase cache
       const cachedHistory = await marketPriceCache.getHistoricalData(params, startDate, endDate);
+      console.log(`Supabase cache has ${cachedHistory ? cachedHistory.length : 0} days of data`);
       
-      // Step 2: Also fetch recent data from API (last 14 days) to ensure we have latest
-      const apiData = await marketPriceAPI.fetchHistoricalPrices(params, 14);
+      // Step 2: Identify missing dates and fetch only those from API
+      const cachedDates = new Set(
+        cachedHistory ? cachedHistory.map(entry => entry.cache_date) : []
+      );
+      
+      // Step 3: Fetch ALL available dates from API for the last 30 days
+      // (Only fetch dates not in cache to optimize performance)
+      const apiHistoricalData = await this.fetchAllHistoricalDates(params, this.maxDays, cachedDates);
 
       // Combine and deduplicate data by date
-      const combinedData = this.combineHistoricalData(cachedHistory, apiData);
+      const combinedData = this.combineHistoricalData(cachedHistory, apiHistoricalData);
 
       console.log(`Found ${combinedData.length} days of historical data`);
 
@@ -55,24 +62,114 @@ class PriceTrendService {
   }
 
   /**
+   * Fetch all historical dates from API (for trend analysis)
+   */
+  async fetchAllHistoricalDates(params, daysToCheck = 30, cachedDates = new Set()) {
+    console.log(`Fetching ALL historical dates from API for last ${daysToCheck} days...`);
+    console.log(`Skipping ${cachedDates.size} dates already in cache`);
+    
+    const today = new Date();
+    const allHistoricalData = [];
+    const batchSize = 7; // Process 7 days at a time to avoid overwhelming API
+    
+    // Generate all dates to check (skip dates already in cache)
+    const datesToCheck = [];
+    for (let i = 1; i <= daysToCheck; i++) {
+      const checkDate = new Date(today);
+      checkDate.setDate(today.getDate() - i);
+      
+      // Format date as DD-MM-YYYY (API format)
+      const day = String(checkDate.getDate()).padStart(2, '0');
+      const month = String(checkDate.getMonth() + 1).padStart(2, '0');
+      const year = checkDate.getFullYear();
+      const dateStr = `${day}-${month}-${year}`;
+      
+      // Convert to ISO format to check cache
+      const isoDate = `${year}-${month}-${day}`;
+      
+      // Only fetch if not in cache
+      if (!cachedDates.has(isoDate)) {
+        datesToCheck.push({ dateStr, isoDate, checkDate });
+      }
+    }
+    
+    console.log(`Need to fetch ${datesToCheck.length} dates from API`);
+    
+    // Process in batches to avoid overwhelming the API
+    for (let batchStart = 0; batchStart < datesToCheck.length; batchStart += batchSize) {
+      const batch = datesToCheck.slice(batchStart, batchStart + batchSize);
+      
+      // Fetch all dates in this batch in parallel
+      const promises = batch.map(async ({ dateStr, isoDate, checkDate }) => {
+        try {
+          const historicalParams = {
+            ...params,
+            date: dateStr,
+            limit: 100
+          };
+          
+          const response = await marketPriceAPI.fetchMarketPrices(historicalParams);
+          
+          if (response.success && response.data.length > 0) {
+            // Cache this data for future use
+            await marketPriceCache.cachePrices(historicalParams, response.data, dateStr);
+            
+            return {
+              cache_date: isoDate,
+              price_data: response.data,
+              dateStr: dateStr
+            };
+          }
+          return null;
+        } catch (error) {
+          console.error(`Error fetching ${dateStr}:`, error);
+          return null;
+        }
+      });
+      
+      const results = await Promise.all(promises);
+      
+      // Add successful results
+      for (const result of results) {
+        if (result) {
+          allHistoricalData.push(result);
+          console.log(`✓ Fetched data for ${result.dateStr} (${result.price_data.length} records)`);
+        }
+      }
+    }
+    
+    console.log(`✅ Total historical dates fetched from API: ${allHistoricalData.length} days`);
+    
+    if (allHistoricalData.length === 0 && datesToCheck.length > 0) {
+      console.warn(`⚠️ Government API doesn't have historical data beyond recent dates`);
+      console.warn(`   This is a data availability limitation from the API itself`);
+    }
+    
+    return allHistoricalData;
+  }
+
+  /**
    * Combine Supabase cache data with API data, removing duplicates
    */
-  combineHistoricalData(cachedHistory, apiData) {
+  combineHistoricalData(cachedHistory, apiHistoricalData) {
     const dataByDate = new Map();
 
-    // Add cached data
+    // Add cached data from Supabase
     if (cachedHistory && Array.isArray(cachedHistory)) {
       for (const entry of cachedHistory) {
         dataByDate.set(entry.cache_date, entry.price_data);
       }
     }
 
-    // Add API data (if found)
-    if (apiData.success && apiData.data && apiData.date) {
-      // Convert DD-MM-YYYY to YYYY-MM-DD for consistency
-      const apiDate = this.convertToISODate(apiData.date);
-      if (apiDate && !dataByDate.has(apiDate)) {
-        dataByDate.set(apiDate, apiData.data);
+    // Add API historical data (array of date entries)
+    if (apiHistoricalData && Array.isArray(apiHistoricalData)) {
+      for (const entry of apiHistoricalData) {
+        if (entry.cache_date && entry.price_data) {
+          // Don't overwrite cached data (cache is more reliable)
+          if (!dataByDate.has(entry.cache_date)) {
+            dataByDate.set(entry.cache_date, entry.price_data);
+          }
+        }
       }
     }
 
@@ -84,6 +181,7 @@ class PriceTrendService {
 
     combined.sort((a, b) => new Date(b.cache_date) - new Date(a.cache_date));
 
+    console.log(`Combined historical data: ${combined.length} unique dates`);
     return combined;
   }
 
