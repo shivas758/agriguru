@@ -5,6 +5,7 @@ import commodityImageService from '../services/commodityImageService';
 import marketImageService from '../services/marketImageService';
 import marketTrendImageService from '../services/marketTrendImageService';
 import PriceTrendCard from './PriceTrendCard';
+import WeatherCard from './WeatherCard';
 
 // Helper function to parse DD/MM/YYYY or DD-MM-YYYY format
 const parseDate = (dateStr) => {
@@ -211,34 +212,54 @@ const ChatMessage = ({ message, onSpeak }) => {
       )}
       
       <div className={`flex-1 ${isUser ? 'max-w-[80%] sm:max-w-[70%]' : ''}`}>
-        {/* Hide text box for market-wide queries, show only for user messages and specific commodity queries */}
-        {!message.isMarketOverview && (
-          <div className={`${
-            isUser 
-              ? 'bg-primary-600 text-white ml-auto rounded-2xl px-3.5 py-2.5' 
-              : 'bg-transparent text-gray-800'
-          }`}>
-            {message.isVoice && (
-              <div className="flex items-center gap-1.5 mb-1.5">
-                <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
-                <span className="text-xs opacity-80">Voice</span>
-              </div>
-            )}
-            
-            <p className="whitespace-pre-wrap text-[15px] leading-[1.6]">{message.text}</p>
-            
-            {!isUser && message.text && (
-              <div className="flex items-center gap-1 mt-2">
-                <button
-                  onClick={handleSpeak}
-                  className="p-1 rounded-md hover:bg-gray-100 transition-colors"
-                  title="Listen to response"
-                >
-                  <Volume2 className="w-3.5 h-3.5 text-gray-500" />
-                </button>
-              </div>
-            )}
+        {/* Show weather card for weather messages */}
+        {!isUser && message.isWeather ? (
+          <div className="mt-2">
+            <WeatherCard 
+              weatherInfo={message.text} 
+              location={message.weatherLocation}
+              query={message.weatherQuery}
+            />
+            <div className="flex items-center gap-1 mt-2">
+              <button
+                onClick={handleSpeak}
+                className="p-1 rounded-md hover:bg-gray-100 transition-colors"
+                title="Listen to response"
+              >
+                <Volume2 className="w-3.5 h-3.5 text-gray-500" />
+              </button>
+            </div>
           </div>
+        ) : (
+          /* Hide text box for market-wide queries, show only for user messages and specific commodity queries */
+          !message.isMarketOverview && (
+            <div className={`${
+              isUser 
+                ? 'bg-primary-600 text-white ml-auto rounded-2xl px-3.5 py-2.5' 
+                : 'bg-transparent text-gray-800'
+            }`}>
+              {message.isVoice && (
+                <div className="flex items-center gap-1.5 mb-1.5">
+                  <div className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse"></div>
+                  <span className="text-xs opacity-80">Voice</span>
+                </div>
+              )}
+              
+              <p className="whitespace-pre-wrap text-[15px] leading-[1.6]">{message.text}</p>
+              
+              {!isUser && message.text && (
+                <div className="flex items-center gap-1 mt-2">
+                  <button
+                    onClick={handleSpeak}
+                    className="p-1 rounded-md hover:bg-gray-100 transition-colors"
+                    title="Listen to response"
+                  >
+                    <Volume2 className="w-3.5 h-3.5 text-gray-500" />
+                  </button>
+                </div>
+              )}
+            </div>
+          )
         )}
         
         {/* Voice control for market-wide queries (for future voice output) */}
@@ -277,7 +298,7 @@ const ChatMessage = ({ message, onSpeak }) => {
                     <img 
                       src={imageUrl} 
                       alt={`Market trends page ${index + 1}`}
-                      className="w-full h-auto max-w-full"
+                      className="w-full h-auto"
                       style={{ display: 'block' }}
                     />
                   </div>
@@ -302,7 +323,7 @@ const ChatMessage = ({ message, onSpeak }) => {
                     <img 
                       src={imageUrl} 
                       alt={`Market prices page ${index + 1}`}
-                      className="w-full h-auto max-w-full"
+                      className="w-full h-auto"
                       style={{ display: 'block' }}
                     />
                   </div>

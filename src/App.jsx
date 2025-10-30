@@ -23,6 +23,7 @@ function App() {
   const [error, setError] = useState('');
   const [showSettings, setShowSettings] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState('');
+  const [conversationContext, setConversationContext] = useState(null);
   
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -83,10 +84,136 @@ function App() {
         queryLanguage = langResult.language;
       }
 
+      // Check if we're waiting for weather location
+      if (conversationContext && conversationContext.type === 'waiting_for_weather_location') {
+        console.log('User provided location for weather query:', text);
+        
+        // Extract location from the response
+        const locationIntent = await geminiService.extractQueryIntent(text, queryLanguage);
+        const location = {
+          city: locationIntent.location.city || locationIntent.location.market || locationIntent.location.district,
+          district: locationIntent.location.district,
+          state: locationIntent.location.state
+        };
+        
+        // Get weather for the provided location
+        const weatherResult = await geminiService.getWeatherInfo(
+          conversationContext.originalQuery + ' in ' + text, 
+          location, 
+          queryLanguage
+        );
+        
+        if (weatherResult.success) {
+          const botMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: weatherResult.message,
+            timestamp: new Date(),
+            language: queryLanguage,
+            isWeather: true,
+            weatherLocation: weatherResult.location,
+            weatherQuery: conversationContext.originalQuery + ' in ' + text
+          };
+          
+          setMessages(prev => [...prev, botMessage]);
+          
+          if (voiceEnabled && isVoice) {
+            voiceService.speak(weatherResult.message, queryLanguage);
+          }
+        } else {
+          const botMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: weatherResult.message,
+            timestamp: new Date(),
+            language: queryLanguage
+          };
+          
+          setMessages(prev => [...prev, botMessage]);
+          
+          if (voiceEnabled && isVoice) {
+            voiceService.speak(weatherResult.message, queryLanguage);
+          }
+        }
+        
+        // Clear context
+        setConversationContext(null);
+        setIsLoading(false);
+        return;
+      }
+
       // Extract intent from query
       const intent = await geminiService.extractQueryIntent(text, queryLanguage);
       // DEBUG: Uncommented for debugging
       console.log('Extracted intent:', JSON.stringify(intent, null, 2));
+      
+      // Handle weather queries
+      if (intent.queryType === 'weather') {
+        console.log('Weather query detected, getting weather info...');
+        
+        const weatherResult = await geminiService.getWeatherInfo(text, intent.location, queryLanguage);
+        
+        if (weatherResult.needsLocation) {
+          // Ask user for location and set context
+          const botMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: weatherResult.message,
+            timestamp: new Date(),
+            language: queryLanguage
+          };
+          
+          setMessages(prev => [...prev, botMessage]);
+          
+          // Set conversation context to track that we're waiting for location
+          setConversationContext({
+            type: 'waiting_for_weather_location',
+            originalQuery: text,
+            language: queryLanguage
+          });
+          
+          if (voiceEnabled && isVoice) {
+            voiceService.speak(weatherResult.message, queryLanguage);
+          }
+        } else if (weatherResult.success) {
+          // Show weather information
+          const botMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: weatherResult.message,
+            timestamp: new Date(),
+            language: queryLanguage,
+            isWeather: true,
+            weatherLocation: weatherResult.location,
+            weatherQuery: text
+          };
+          
+          setMessages(prev => [...prev, botMessage]);
+          
+          if (voiceEnabled && isVoice) {
+            voiceService.speak(weatherResult.message, queryLanguage);
+          }
+        } else {
+          // Error getting weather
+          const botMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: weatherResult.message,
+            timestamp: new Date(),
+            language: queryLanguage,
+            isWeather: false
+          };
+          
+          setMessages(prev => [...prev, botMessage]);
+          
+          if (voiceEnabled && isVoice) {
+            voiceService.speak(weatherResult.message, queryLanguage);
+          }
+        }
+        
+        setIsLoading(false);
+        return;
+      }
       
       // Handle non-agriculture queries
       if (intent.queryType === 'non_agriculture') {

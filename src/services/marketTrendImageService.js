@@ -49,30 +49,34 @@ class MarketTrendImageService {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
 
-    // Canvas dimensions
-    const rowHeight = 90;
-    const headerRowHeight = 100;
-    const titleHeight = 160;
-    const footerHeight = 50;
-    const canvasWidth = 1600;
+    // Canvas dimensions - Portrait layout for mobile with 2x resolution for sharpness
+    const scale = 2; // High resolution multiplier
+    const rowHeight = 85 * scale;
+    const headerRowHeight = 70 * scale;
+    const titleHeight = 110 * scale;
+    const footerHeight = 45 * scale;
+    const canvasWidth = 600 * scale; // Portrait width at 2x resolution
     const canvasHeight = titleHeight + headerRowHeight + (trends.length * rowHeight) + footerHeight;
 
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
+    
+    // Scale context for high resolution
+    ctx.scale(scale, scale);
 
     // Background
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-    // Draw title
-    this.drawTitleSection(ctx, marketInfo, dateRange, canvasWidth);
+    // Draw title (pass unscaled width)
+    this.drawTitleSection(ctx, marketInfo, dateRange, canvasWidth / scale);
 
-    // Draw table
-    const tableY = titleHeight;
-    await this.drawTrendTable(ctx, trends, tableY, canvasWidth);
+    // Draw table (pass unscaled values)
+    const tableY = titleHeight / scale;
+    await this.drawTrendTable(ctx, trends, tableY, canvasWidth / scale);
 
-    // Footer
-    this.drawFooter(ctx, canvasHeight - footerHeight, canvasWidth, canvasHeight, pageNumber, totalPages);
+    // Footer (pass unscaled values)
+    this.drawFooter(ctx, (canvasHeight - footerHeight) / scale, canvasWidth / scale, canvasHeight / scale, pageNumber, totalPages);
 
     return canvas.toDataURL('image/png');
   }
@@ -87,31 +91,39 @@ class MarketTrendImageService {
     const marketName = marketInfo.market || marketInfo.district || 'Market';
     
     ctx.fillStyle = '#dc2626';
-    ctx.font = 'bold 48px Arial, sans-serif';
+    ctx.font = 'bold 22px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`${marketName} - Price Trends`, canvasWidth / 2, 55);
+    ctx.fillText(`${marketName} - Price Trends`, canvasWidth / 2, 40);
 
+    // Date range - compact
+    const startDate = dateRange.start || '';
+    const endDate = dateRange.end || '';
+    let dateText = '';
+    
+    if (startDate && endDate) {
+      dateText = `${startDate} to ${endDate}`;
+    } else if (endDate) {
+      dateText = `As of ${endDate}`;
+    }
+    
+    if (dateText) {
+      ctx.fillStyle = '#1e40af';
+      ctx.font = '15px Arial, sans-serif';
+      ctx.fillText(dateText, canvasWidth / 2, 62);
+    }
+
+    // Trend period label
+    ctx.fillStyle = '#6b7280';
+    ctx.font = '13px Arial, sans-serif';
+    ctx.fillText(`(${dateRange.period || 'Last 30 days'})`, canvasWidth / 2, 80);
+    
     // Decorative line
     ctx.strokeStyle = '#fbbf24';
-    ctx.lineWidth = 4;
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(padding, 75);
-    ctx.lineTo(canvasWidth - padding, 75);
+    ctx.moveTo(padding, 90);
+    ctx.lineTo(canvasWidth - padding, 90);
     ctx.stroke();
-
-    // Date range
-    const oldestDate = this.formatDate(dateRange.oldest);
-    const newestDate = this.formatDate(dateRange.newest);
-    
-    ctx.fillStyle = '#1e40af';
-    ctx.font = 'bold 32px Arial, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(`${oldestDate} to ${newestDate}`, canvasWidth / 2, 120);
-
-    // Subtitle
-    ctx.fillStyle = '#6b7280';
-    ctx.font = '24px Arial, sans-serif';
-    ctx.fillText('Last 30 Days Price Movement', canvasWidth / 2, 150);
   }
 
   /**
@@ -122,17 +134,16 @@ class MarketTrendImageService {
     const tableWidth = canvasWidth - (padding * 2);
     const tableX = padding;
     
-    // Column widths
-    const imageColWidth = 100;
-    const nameColWidth = 320;
-    const oldPriceColWidth = 220;
-    const newPriceColWidth = 220;
-    const changeColWidth = 220;
-    const percentColWidth = 220;
-    const trendColWidth = 300;
+    // Column widths - Portrait layout (total must fit in 540px)
+    const imageColWidth = 55;
+    const nameColWidth = 135;
+    const newPriceColWidth = 95;
+    const changeColWidth = 88;
+    const percentColWidth = 83;
+    const trendColWidth = 84;
     
-    const headerRowHeight = 100;
-    const rowHeight = 90;
+    const headerRowHeight = 70;
+    const rowHeight = 85;
     
     // Draw header
     let currentY = startY;
@@ -150,23 +161,28 @@ class MarketTrendImageService {
     ctx.strokeRect(currentX, currentY, imageColWidth, headerRowHeight);
     currentX += imageColWidth;
     
-    // Headers
+    // Headers - compact for portrait
     const headers = [
-      { text: 'Commodity', width: nameColWidth },
-      { text: 'Old Price', width: oldPriceColWidth },
-      { text: 'Current Price', width: newPriceColWidth },
-      { text: 'Change', width: changeColWidth },
-      { text: 'Change %', width: percentColWidth },
-      { text: 'Trend', width: trendColWidth }
+      { text: ['Commodity'], width: nameColWidth },
+      { text: ['Current', 'Price'], width: newPriceColWidth },
+      { text: ['Change'], width: changeColWidth },
+      { text: ['Change', '%'], width: percentColWidth },
+      { text: ['Trend'], width: trendColWidth }
     ];
     
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 28px Arial, sans-serif';
+    ctx.font = 'bold 15px Arial, sans-serif';
     ctx.textAlign = 'center';
     
     for (const header of headers) {
       ctx.strokeRect(currentX, currentY, header.width, headerRowHeight);
-      ctx.fillText(header.text, currentX + header.width / 2, currentY + 60);
+      // Draw multi-line header text
+      if (header.text.length === 1) {
+        ctx.fillText(header.text[0], currentX + header.width / 2, currentY + headerRowHeight / 2 + 5);
+      } else {
+        ctx.fillText(header.text[0], currentX + header.width / 2, currentY + 28);
+        ctx.fillText(header.text[1], currentX + header.width / 2, currentY + 48);
+      }
       currentX += header.width;
     }
     
@@ -181,7 +197,6 @@ class MarketTrendImageService {
         currentY, 
         imageColWidth,
         nameColWidth,
-        oldPriceColWidth,
         newPriceColWidth,
         changeColWidth,
         percentColWidth,
@@ -196,10 +211,10 @@ class MarketTrendImageService {
   /**
    * Draw a single trend row
    */
-  async drawTrendRow(ctx, trend, x, y, imageColWidth, nameColWidth, oldPriceColWidth, newPriceColWidth, changeColWidth, percentColWidth, trendColWidth, rowHeight, index) {
+  async drawTrendRow(ctx, trend, x, y, imageColWidth, nameColWidth, newPriceColWidth, changeColWidth, percentColWidth, trendColWidth, rowHeight, index) {
     // Alternating row colors
-    ctx.fillStyle = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
-    const totalWidth = imageColWidth + nameColWidth + oldPriceColWidth + newPriceColWidth + changeColWidth + percentColWidth + trendColWidth;
+    ctx.fillStyle = index % 2 === 0 ? '#ffffff' : '#f9fafb';
+    const totalWidth = imageColWidth + nameColWidth + newPriceColWidth + changeColWidth + percentColWidth + trendColWidth;
     ctx.fillRect(x, y, totalWidth, rowHeight);
     
     // Row borders
@@ -212,7 +227,7 @@ class MarketTrendImageService {
     ctx.strokeRect(currentX, y, imageColWidth, rowHeight);
     
     // Draw commodity image
-    const imageSize = 60;
+    const imageSize = 42;
     const imageX = currentX + (imageColWidth - imageSize) / 2;
     const imageY = y + (rowHeight - imageSize) / 2;
     
@@ -237,80 +252,104 @@ class MarketTrendImageService {
     
     currentX += imageColWidth;
     
-    // Commodity name
+    // Commodity name - compact with text wrapping
     ctx.strokeRect(currentX, y, nameColWidth, rowHeight);
-    ctx.fillStyle = '#dc2626';
-    ctx.font = 'bold 26px Arial, sans-serif';
+    ctx.fillStyle = '#b91c1c';
+    ctx.font = 'bold 17px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(trend.commodity, currentX + nameColWidth / 2, y + rowHeight / 2 + 10);
-    currentX += nameColWidth;
     
-    // Old price
-    ctx.strokeRect(currentX, y, oldPriceColWidth, rowHeight);
-    ctx.fillStyle = '#6b7280';
-    ctx.font = 'bold 30px Arial, sans-serif';
-    ctx.fillText(`₹${trend.oldPrice}`, currentX + oldPriceColWidth / 2, y + rowHeight / 2 + 10);
-    currentX += oldPriceColWidth;
+    // Wrap commodity name if too long
+    const commodityName = trend.commodity || 'N/A';
+    const maxWidth = nameColWidth - 8;
+    const words = commodityName.split(' ');
+    const lines = [];
+    let currentLine = words[0];
+    
+    for (let i = 1; i < words.length; i++) {
+      const testLine = currentLine + ' ' + words[i];
+      const metrics = ctx.measureText(testLine);
+      if (metrics.width > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = words[i];
+      } else {
+        currentLine = testLine;
+      }
+    }
+    lines.push(currentLine);
+    
+    const lineHeight = 16;
+    const totalHeight = lines.length * lineHeight;
+    let textY = y + (rowHeight - totalHeight) / 2 + 12;
+    
+    lines.forEach(line => {
+      ctx.fillText(line, currentX + nameColWidth / 2, textY);
+      textY += lineHeight;
+    });
+    currentX += nameColWidth;
     
     // Current price
     ctx.strokeRect(currentX, y, newPriceColWidth, rowHeight);
     ctx.fillStyle = '#1e40af';
-    ctx.font = 'bold 32px Arial, sans-serif';
-    ctx.fillText(`₹${trend.currentPrice}`, currentX + newPriceColWidth / 2, y + rowHeight / 2 + 12);
+    ctx.font = 'bold 20px Arial, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(trend.currentPrice, currentX + newPriceColWidth / 2, y + rowHeight / 2 + 6);
     currentX += newPriceColWidth;
     
     // Price change
-    const changeColor = trend.priceChange >= 0 ? '#059669' : '#dc2626';
+    const changeColor = trend.priceChange >= 0 ? '#047857' : '#dc2626';
     const changePrefix = trend.priceChange >= 0 ? '+' : '';
     
     ctx.strokeRect(currentX, y, changeColWidth, rowHeight);
     ctx.fillStyle = changeColor;
-    ctx.font = 'bold 32px Arial, sans-serif';
-    ctx.fillText(`${changePrefix}₹${trend.priceChange}`, currentX + changeColWidth / 2, y + rowHeight / 2 + 12);
+    ctx.font = 'bold 18px Arial, sans-serif';
+    ctx.fillText(`${changePrefix}${trend.priceChange}`, currentX + changeColWidth / 2, y + rowHeight / 2 + 6);
     currentX += changeColWidth;
     
     // Percent change
     ctx.strokeRect(currentX, y, percentColWidth, rowHeight);
     ctx.fillStyle = changeColor;
-    ctx.font = 'bold 32px Arial, sans-serif';
-    ctx.fillText(`${changePrefix}${trend.percentChange}%`, currentX + percentColWidth / 2, y + rowHeight / 2 + 12);
+    ctx.font = 'bold 18px Arial, sans-serif';
+    ctx.fillText(`${changePrefix}${trend.percentChange}%`, currentX + percentColWidth / 2, y + rowHeight / 2 + 6);
     currentX += percentColWidth;
     
-    // Trend indicator
+    // Trend indicator - compact arrow
     ctx.strokeRect(currentX, y, trendColWidth, rowHeight);
-    ctx.fillStyle = '#374151';
-    ctx.font = 'bold 24px Arial, sans-serif';
     
-    // Draw trend arrow
-    const arrowX = currentX + 40;
+    const arrowX = currentX + trendColWidth / 2;
     const arrowY = y + rowHeight / 2;
     
     if (trend.direction === 'increasing') {
       // Up arrow
-      ctx.fillStyle = '#059669';
+      ctx.fillStyle = '#047857';
       ctx.beginPath();
-      ctx.moveTo(arrowX, arrowY + 10);
-      ctx.lineTo(arrowX - 15, arrowY + 25);
-      ctx.lineTo(arrowX + 15, arrowY + 25);
+      ctx.moveTo(arrowX, arrowY - 10);
+      ctx.lineTo(arrowX - 10, arrowY + 5);
+      ctx.lineTo(arrowX + 10, arrowY + 5);
       ctx.fill();
+      ctx.fillStyle = '#047857';
+      ctx.font = '11px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Rising', arrowX, arrowY + 20);
     } else if (trend.direction === 'decreasing') {
       // Down arrow
       ctx.fillStyle = '#dc2626';
       ctx.beginPath();
-      ctx.moveTo(arrowX, arrowY + 25);
-      ctx.lineTo(arrowX - 15, arrowY + 10);
-      ctx.lineTo(arrowX + 15, arrowY + 10);
+      ctx.moveTo(arrowX, arrowY + 10);
+      ctx.lineTo(arrowX - 10, arrowY - 5);
+      ctx.lineTo(arrowX + 10, arrowY - 5);
       ctx.fill();
+      ctx.fillStyle = '#dc2626';
+      ctx.font = '11px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Falling', arrowX, arrowY + 20);
     } else {
-      // Flat arrow
+      // Flat line
       ctx.fillStyle = '#6b7280';
-      ctx.fillRect(arrowX - 15, arrowY + 15, 30, 6);
+      ctx.fillRect(arrowX - 12, arrowY - 2, 24, 4);
+      ctx.font = '11px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('Stable', arrowX, arrowY + 18);
     }
-    
-    // Trend text
-    ctx.fillStyle = '#374151';
-    ctx.textAlign = 'left';
-    ctx.fillText(this.capitalizeFirst(trend.trendStrength), arrowX + 30, y + rowHeight / 2 + 10);
   }
 
   /**
@@ -320,16 +359,16 @@ class MarketTrendImageService {
     ctx.fillStyle = '#059669';
     ctx.fillRect(0, y, canvasWidth, canvasHeight - y);
 
-    ctx.font = 'bold 24px Arial, sans-serif';
+    ctx.font = 'bold 15px Arial, sans-serif';
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     
-    let footerText = 'AgriGuru - Price Trend Analysis (Last 30 Days)';
+    let footerText = 'AgriGuru - Price Trend Analysis';
     if (totalPages > 1) {
-      footerText += ` (Page ${pageNumber}/${totalPages})`;
+      footerText += ` (${pageNumber}/${totalPages})`;
     }
     
-    ctx.fillText(footerText, canvasWidth / 2, y + 35);
+    ctx.fillText(footerText, canvasWidth / 2, y + 30);
   }
 
   /**

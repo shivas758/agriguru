@@ -145,13 +145,28 @@ Query: "${query}"
 Language: ${language}
 
 FIRST, categorize the query into ONE of these categories:
-1. "non_agriculture" - Questions completely unrelated to agriculture/farming (sports, politics, movies, weather, etc.)
-2. "general_agriculture" - Agriculture-related questions but NOT about market prices (farming techniques, crop diseases, soil health, irrigation, best practices, etc.)
-3. "price_trend" - Asking about price changes, trends, increases, decreases over time (this week, last week, month, etc.)
-4. "price_inquiry" - Asking for specific commodity price
-5. "market_overview" - Asking for all/multiple commodity prices in a market
+1. "weather" - Questions about weather, climate, rainfall, temperature, forecast (today, tomorrow, this week, etc.)
+2. "non_agriculture" - Questions completely unrelated to agriculture/farming (sports, politics, movies, etc.)
+3. "general_agriculture" - Agriculture-related questions but NOT about market prices (farming techniques, crop diseases, soil health, irrigation, best practices, etc.)
+4. "price_trend" - Asking about price changes, trends, increases, decreases over time (this week, last week, month, etc.)
+5. "price_inquiry" - Asking for specific commodity price
+6. "market_overview" - Asking for all/multiple commodity prices in a market
 
 Then return ONLY a JSON object based on the category:
+
+FOR WEATHER QUERIES:
+{
+  "queryType": "weather",
+  "commodity": null,
+  "location": {
+    "market": null,
+    "district": null,
+    "state": null,
+    "city": "city name if mentioned, null otherwise"
+  },
+  "date": null,
+  "needsDisambiguation": false
+}
 
 FOR NON-AGRICULTURE QUERIES:
 {
@@ -199,6 +214,9 @@ FOR MARKET PRICE QUERIES (price_inquiry or market_overview):
 }
 
 EXAMPLES:
+- "What's the weather like in Adoni?" → queryType: "weather", city: "Adoni", district: "Kurnool", state: "Andhra Pradesh"
+- "Will it rain tomorrow in Kurnool?" → queryType: "weather", city: "Kurnool", district: "Kurnool", state: "Andhra Pradesh"
+- "How's the weather gonna be tomorrow in Hyderabad?" → queryType: "weather", city: "Hyderabad", state: "Telangana"
 - "What is the capital of France?" → queryType: "non_agriculture"
 - "Who won the cricket match?" → queryType: "non_agriculture"
 - "How to control pest in tomato plants?" → queryType: "general_agriculture"
@@ -487,6 +505,88 @@ Return ONLY the JSON array, no other text.`;
     } catch (error) {
       console.error('Error finding nearby markets:', error);
       return null;
+    }
+  }
+
+  async getWeatherInfo(query, location, language = 'en') {
+    if (!this.model) {
+      return {
+        success: false,
+        message: language === 'hi'
+          ? 'क्षमा करें, मौसम की जानकारी अभी उपलब्ध नहीं है।'
+          : 'Sorry, weather information is not available at the moment.'
+      };
+    }
+
+    try {
+      const languageNames = {
+        'en': 'English',
+        'hi': 'Hindi',
+        'ta': 'Tamil',
+        'te': 'Telugu',
+        'kn': 'Kannada',
+        'ml': 'Malayalam',
+        'mr': 'Marathi',
+        'gu': 'Gujarati',
+        'pa': 'Punjabi',
+        'bn': 'Bengali',
+        'or': 'Odia',
+        'as': 'Assamese'
+      };
+
+      const targetLang = languageNames[language] || 'English';
+      
+      // Determine location string
+      const locationStr = location.city || location.district || location.market || location.state || '';
+      
+      if (!locationStr) {
+        return {
+          success: false,
+          needsLocation: true,
+          message: language === 'hi'
+            ? 'कृपया बताएं कि आप किस स्थान के मौसम की जानकारी चाहते हैं?'
+            : 'Please specify the location for weather information.'
+        };
+      }
+
+      const prompt = `
+User asked: "${query}"
+Location: ${locationStr}
+Language: ${targetLang}
+
+Provide current weather information for ${locationStr} in ${targetLang}.
+
+IMPORTANT: Structure your response to include these specific details:
+1. Temperature (format: "XX°C" or "XX degrees")
+2. Weather condition (sunny, cloudy, rainy, etc.)
+3. Rainfall chance (format: "XX% chance of rain" or "XX% precipitation")
+4. Wind speed (format: "wind speed XX km/h")
+5. Humidity (format: "humidity XX%")
+6. Brief agricultural advice related to the weather conditions (if applicable)
+
+Example format:
+"Currently 30°C with partly cloudy skies. 40% chance of rain. Wind speed 15 km/h. Humidity 65%. Good conditions for irrigation. Avoid spraying pesticides if rain is expected."
+
+Keep the response concise and in ${targetLang}.
+
+Answer:`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      
+      return {
+        success: true,
+        message: response.text().trim(),
+        location: locationStr
+      };
+    } catch (error) {
+      console.error('Error getting weather information:', error);
+      return {
+        success: false,
+        message: language === 'hi'
+          ? 'क्षमा करें, मौसम की जानकारी प्राप्त करने में त्रुटि हुई। कृपया बाद में पुनः प्रयास करें।'
+          : 'Sorry, there was an error getting weather information. Please try again later.'
+      };
     }
   }
 

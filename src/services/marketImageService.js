@@ -61,30 +61,34 @@ class MarketImageService {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
 
-    // Table dimensions
-    const rowHeight = 85;
-    const headerRowHeight = 100;
-    const titleHeight = 130;
-    const footerHeight = 50;
-    const canvasWidth = 1400;
+    // Table dimensions - Portrait layout for mobile with 2x resolution for sharpness
+    const scale = 2; // High resolution multiplier
+    const rowHeight = 90 * scale;
+    const headerRowHeight = 70 * scale;
+    const titleHeight = 110 * scale;
+    const footerHeight = 45 * scale;
+    const canvasWidth = 600 * scale;  // Portrait width for mobile at 2x resolution
     const canvasHeight = titleHeight + headerRowHeight + (priceData.length * rowHeight) + footerHeight;
 
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
+    
+    // Scale context for high resolution
+    ctx.scale(scale, scale);
 
     // Background - white
     ctx.fillStyle = '#ffffff';
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
-    // Draw title section
-    this.drawTitleSection(ctx, marketInfo, canvasWidth);
+    // Draw title section (pass unscaled width)
+    this.drawTitleSection(ctx, marketInfo, canvasWidth / scale);
 
-    // Draw table
-    const tableY = titleHeight;
-    await this.drawTable(ctx, priceData, tableY, canvasWidth);
+    // Draw table (pass unscaled values)
+    const tableY = titleHeight / scale;
+    await this.drawTable(ctx, priceData, tableY, canvasWidth / scale);
 
-    // Footer
-    this.drawFooter(ctx, canvasHeight - footerHeight, canvasWidth, canvasHeight, pageNumber, totalPages);
+    // Footer (pass unscaled values)
+    this.drawFooter(ctx, (canvasHeight - footerHeight) / scale, canvasWidth / scale, canvasHeight / scale, pageNumber, totalPages);
 
     // Convert canvas to image
     return canvas.toDataURL('image/png');
@@ -96,37 +100,37 @@ class MarketImageService {
   drawTitleSection(ctx, marketInfo, canvasWidth) {
     const padding = 30;
     
-    // Market name - centered, large
+    // Title
     const marketName = marketInfo.market || marketInfo.district || 'Market';
     const location = marketInfo.district && marketInfo.state 
       ? `${marketInfo.district}, ${marketInfo.state}` 
       : marketInfo.state || '';
     
     ctx.fillStyle = '#dc2626';
-    ctx.font = 'bold 48px Arial, sans-serif';
+    ctx.font = 'bold 22px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`${marketName} Market Price Board`, canvasWidth / 2, 55);
+    ctx.fillText(`${marketName} Market Price Board`, canvasWidth / 2, 40);
 
-    // Decorative line
-    ctx.strokeStyle = '#fbbf24';
-    ctx.lineWidth = 4;
-    ctx.beginPath();
-    ctx.moveTo(padding, 75);
-    ctx.lineTo(canvasWidth - padding, 75);
-    ctx.stroke();
-
-    // Date - large and prominent
+    // Date - compact for portrait
     const today = new Date();
     const day = today.getDate();
-    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
-                       'July', 'August', 'September', 'October', 'November', 'December'];
+    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     const month = monthNames[today.getMonth()];
     const year = today.getFullYear();
     
     ctx.fillStyle = '#1e40af';
-    ctx.font = 'bold 36px Arial, sans-serif';
+    ctx.font = '17px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`${day} ${month} ${year}`, canvasWidth / 2, 115);
+    ctx.fillText(`${day} ${month} ${year}`, canvasWidth / 2, 65);
+    
+    // Decorative line
+    ctx.strokeStyle = '#fbbf24';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(padding, 80);
+    ctx.lineTo(canvasWidth - padding, 80);
+    ctx.stroke();
   }
 
   /**
@@ -137,15 +141,15 @@ class MarketImageService {
     const tableWidth = canvasWidth - (padding * 2);
     const tableX = padding;
     
-    // Column widths
-    const imageColWidth = 120;
-    const nameColWidth = 380;
-    const minColWidth = 280;
-    const modalColWidth = 280;
-    const maxColWidth = 280;
+    // Column widths - Optimized for portrait layout (total must fit in 540px)
+    const imageColWidth = 60;
+    const nameColWidth = 150;
+    const minColWidth = 110;
+    const modalColWidth = 110;
+    const maxColWidth = 110;
     
-    const headerRowHeight = 100;
-    const rowHeight = 85;
+    const headerRowHeight = 70;
+    const rowHeight = 90;
     
     // Draw table header
     let currentY = startY;
@@ -168,28 +172,32 @@ class MarketImageService {
     // Commodity Name header
     ctx.strokeRect(currentX, currentY, nameColWidth, headerRowHeight);
     ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 32px Arial, sans-serif';
+    ctx.font = 'bold 16px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Commodity Name', currentX + nameColWidth / 2, currentY + 60);
+    ctx.fillText('Commodity', currentX + nameColWidth / 2, currentY + 30);
+    ctx.fillText('Name', currentX + nameColWidth / 2, currentY + 50);
     currentX += nameColWidth;
     
     // Min Price header
     ctx.strokeStyle = '#ffffff';
     ctx.strokeRect(currentX, currentY, minColWidth, headerRowHeight);
     ctx.fillStyle = '#ffffff';
-    ctx.fillText('Minimum Price', currentX + minColWidth / 2, currentY + 60);
+    ctx.fillText('Minimum', currentX + minColWidth / 2, currentY + 30);
+    ctx.fillText('Price', currentX + minColWidth / 2, currentY + 50);
     currentX += minColWidth;
     
     // Modal Price header
     ctx.strokeRect(currentX, currentY, modalColWidth, headerRowHeight);
     ctx.fillStyle = '#ffffff';
-    ctx.fillText('Modal Price', currentX + modalColWidth / 2, currentY + 60);
+    ctx.fillText('Modal', currentX + modalColWidth / 2, currentY + 30);
+    ctx.fillText('Price', currentX + modalColWidth / 2, currentY + 50);
     currentX += modalColWidth;
     
     // Max Price header
     ctx.strokeRect(currentX, currentY, maxColWidth, headerRowHeight);
     ctx.fillStyle = '#ffffff';
-    ctx.fillText('Maximum Price', currentX + maxColWidth / 2, currentY + 60);
+    ctx.fillText('Maximum', currentX + maxColWidth / 2, currentY + 30);
+    ctx.fillText('Price', currentX + maxColWidth / 2, currentY + 50);
     
     currentY += headerRowHeight;
     
@@ -205,8 +213,8 @@ class MarketImageService {
    * Draw a single table row
    */
   async drawTableRow(ctx, price, x, y, imageColWidth, nameColWidth, minColWidth, modalColWidth, maxColWidth, rowHeight, index) {
-    // Alternating row colors
-    ctx.fillStyle = index % 2 === 0 ? '#ffffff' : '#f8f9fa';
+    // Alternating row colors - softer contrast
+    ctx.fillStyle = index % 2 === 0 ? '#ffffff' : '#f9fafb';
     const totalWidth = imageColWidth + nameColWidth + minColWidth + modalColWidth + maxColWidth;
     ctx.fillRect(x, y, totalWidth, rowHeight);
     
@@ -219,8 +227,8 @@ class MarketImageService {
     // Image cell
     ctx.strokeRect(currentX, y, imageColWidth, rowHeight);
     
-    // Draw commodity image
-    const imageSize = 60;
+    // Draw commodity image - optimized for portrait
+    const imageSize = 45;
     const imageX = currentX + (imageColWidth - imageSize) / 2;
     const imageY = y + (rowHeight - imageSize) / 2;
     
@@ -245,31 +253,62 @@ class MarketImageService {
     
     currentX += imageColWidth;
     
-    // Commodity name cell
+    // Commodity name cell with text wrapping
     ctx.strokeRect(currentX, y, nameColWidth, rowHeight);
-    ctx.fillStyle = '#dc2626';
-    ctx.font = 'bold 30px Arial, sans-serif';
+    ctx.fillStyle = '#b91c1c';
+    ctx.font = 'bold 18px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(price.commodity, currentX + nameColWidth / 2, y + rowHeight / 2 + 10);
+    
+    // Wrap text if needed
+    const commodityName = price.commodity || 'N/A';
+    const maxWidth = nameColWidth - 10; // padding
+    const words = commodityName.split(' ');
+    const lines = [];
+    let currentLine = words[0];
+    
+    for (let i = 1; i < words.length; i++) {
+      const testLine = currentLine + ' ' + words[i];
+      const metrics = ctx.measureText(testLine);
+      if (metrics.width > maxWidth && currentLine) {
+        lines.push(currentLine);
+        currentLine = words[i];
+      } else {
+        currentLine = testLine;
+      }
+    }
+    lines.push(currentLine);
+    
+    // Draw wrapped lines
+    const lineHeight = 18;
+    const totalHeight = lines.length * lineHeight;
+    let textY = y + (rowHeight - totalHeight) / 2 + 13;
+    
+    lines.forEach(line => {
+      ctx.fillText(line, currentX + nameColWidth / 2, textY);
+      textY += lineHeight;
+    });
+    
     currentX += nameColWidth;
     
     // Min price cell
     ctx.strokeRect(currentX, y, minColWidth, rowHeight);
-    ctx.fillStyle = '#059669';
-    ctx.font = 'bold 36px Arial, sans-serif';
-    ctx.fillText(price.minPrice || 'N/A', currentX + minColWidth / 2, y + rowHeight / 2 + 12);
+    ctx.fillStyle = '#047857';
+    ctx.font = 'bold 24px Arial, sans-serif';
+    ctx.fillText(price.minPrice || 'N/A', currentX + minColWidth / 2, y + rowHeight / 2 + 8);
     currentX += minColWidth;
     
     // Modal price cell  
     ctx.strokeRect(currentX, y, modalColWidth, rowHeight);
     ctx.fillStyle = '#1e40af';
-    ctx.fillText(price.modalPrice || 'N/A', currentX + modalColWidth / 2, y + rowHeight / 2 + 12);
+    ctx.font = 'bold 24px Arial, sans-serif';
+    ctx.fillText(price.modalPrice || 'N/A', currentX + modalColWidth / 2, y + rowHeight / 2 + 8);
     currentX += modalColWidth;
     
     // Max price cell
     ctx.strokeRect(currentX, y, maxColWidth, rowHeight);
     ctx.fillStyle = '#dc2626';
-    ctx.fillText(price.maxPrice || 'N/A', currentX + maxColWidth / 2, y + rowHeight / 2 + 12);
+    ctx.font = 'bold 24px Arial, sans-serif';
+    ctx.fillText(price.maxPrice || 'N/A', currentX + maxColWidth / 2, y + rowHeight / 2 + 8);
   }
 
 
@@ -282,7 +321,7 @@ class MarketImageService {
     ctx.fillRect(0, y, canvasWidth, canvasHeight - y);
 
     // Footer text
-    ctx.font = 'bold 24px Arial, sans-serif';
+    ctx.font = 'bold 15px Arial, sans-serif';
     ctx.fillStyle = '#ffffff';
     ctx.textAlign = 'center';
     
@@ -291,7 +330,7 @@ class MarketImageService {
       footerText += ` (Page ${pageNumber}/${totalPages})`;
     }
     
-    ctx.fillText(footerText, canvasWidth / 2, y + 35);
+    ctx.fillText(footerText, canvasWidth / 2, y + 30);
   }
 
   /**
