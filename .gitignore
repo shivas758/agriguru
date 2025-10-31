@@ -23,10 +23,13 @@ dist-ssr
 *.sln
 *.sw?
 
-# Environment variables
+# Environment variables (NEVER COMMIT THESE!)
 .env
 .env.local
 .env.production
+backend/.env
+backend/.env.local
+backend/.env.production
 
 # PWA
 sw.*
@@ -35,3 +38,14 @@ workbox-*.js
 # Build files
 build/
 .cache/
+
+# Backend specific
+backend/node_modules/
+backend/logs/
+backend/*.log
+backend/dist/
+backend/.pm2/
+
+# PM2 process files
+.pm2/
+pm2-*.log

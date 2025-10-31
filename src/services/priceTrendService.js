@@ -1,9 +1,10 @@
 /**
  * Price Trend Service
  * Calculates price trends, changes, and patterns over the last 30 days
- * Uses both Supabase cache and API to gather historical data
+ * Uses database for instant historical data, falls back to API if needed
  */
 
+import marketPriceDB from './marketPriceDB';
 import marketPriceCache from './marketPriceCache';
 import marketPriceAPI from './marketPriceAPI';
 
@@ -430,7 +431,40 @@ class PriceTrendService {
     try {
       console.log('Fetching price trends for:', params);
 
-      // Fetch historical data
+      // Try database first for faster results
+      console.log('🔍 Trying database for price trends...');
+      const dbTrends = await marketPriceDB.getPriceTrends(params, this.maxDays);
+      
+      if (dbTrends && dbTrends.success && dbTrends.data && dbTrends.data.length > 0) {
+        console.log(`✅ Got ${dbTrends.data.length} days of trend data from database`);
+        
+        // Transform database trend data to match expected format
+        const historicalData = dbTrends.data.map(day => ({
+          cache_date: day.arrival_date,
+          price_data: [{
+            Commodity: params.commodity,
+            Modal_Price: day.avg_price,
+            Min_Price: day.min_price,
+            Max_Price: day.max_price
+          }]
+        }));
+        
+        const trend = this.calculateCommodityTrend(historicalData, params.commodity);
+        
+        if (trend) {
+          return {
+            success: true,
+            type: 'single_commodity',
+            trend,
+            summary: this.formatTrendSummary(trend),
+            daysAvailable: dbTrends.data.length,
+            source: 'database'
+          };
+        }
+      }
+      
+      // Fallback to cache+API approach if DB doesn't have data
+      console.log('📡 Database has limited data, fetching from cache+API...');
       const historicalResult = await this.fetchHistoricalData(params);
 
       if (!historicalResult.success || historicalResult.data.length === 0) {

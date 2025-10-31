@@ -8,6 +8,7 @@ import ChatMessage from './components/ChatMessage';
 import PriceTrendCard from './components/PriceTrendCard';
 import marketPriceAPI from './services/marketPriceAPI';
 import marketPriceCache from './services/marketPriceCache';
+import marketPriceDB from './services/marketPriceDB';
 import geminiService from './services/geminiService';
 import voiceService from './services/voiceService';
 import priceTrendService from './services/priceTrendService';
@@ -423,11 +424,20 @@ function App() {
       // DEBUG: Uncommented for debugging
       console.log('Query parameters for API:', JSON.stringify(queryParams, null, 2));
 
-      // Try with district variations if available - using cache
-      const response = await marketPriceCache.fetchMarketPricesWithCache(
-        queryParams,
-        districtVariations
-      );
+      // Try DB first (instant), fallback to API if needed
+      console.log('🔍 Trying database first...');
+      let response = await marketPriceDB.getMarketPrices(queryParams);
+      
+      // If no data in DB or error, fallback to API with cache
+      if (!response.success || response.data.length === 0) {
+        console.log('📡 No data in DB, fetching from API...');
+        response = await marketPriceCache.fetchMarketPricesWithCache(
+          queryParams,
+          districtVariations
+        );
+      } else {
+        console.log(`✅ Found ${response.data.length} records in database (${response.source})`);
+      }
       // DEBUG: Uncommented for debugging
       console.log('API response:', response.success ? `${response.data.length} records found` : 'No data');
       
@@ -497,7 +507,7 @@ function App() {
         if (!hasMatchingLocation && requestedDistrict) {
           // DEBUG: Uncommented for debugging
           console.log(`API returned data but not for ${requestedDistrict}. Checking historical data...`);
-          const lastAvailablePrice = await marketPriceCache.getLastAvailablePrice(queryParams);
+          const lastAvailablePrice = await marketPriceDB.getLastAvailablePrice(queryParams);
           
           if (lastAvailablePrice && lastAvailablePrice.data.length > 0) {
             // Found historical data in Supabase for the specific location
@@ -649,7 +659,7 @@ function App() {
         // DEBUG: Uncommented for debugging
         console.log('No data found for today, checking for last available price in DB...');
         
-        const lastAvailablePrice = await marketPriceCache.getLastAvailablePrice(queryParams);
+        const lastAvailablePrice = await marketPriceDB.getLastAvailablePrice(queryParams);
         
         if (lastAvailablePrice && lastAvailablePrice.data.length > 0) {
           // Found historical data in DB
