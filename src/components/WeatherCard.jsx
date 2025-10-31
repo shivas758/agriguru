@@ -1,5 +1,5 @@
 import React from 'react';
-import { Cloud, CloudRain, Sun, Wind, Droplets, CloudDrizzle, CloudSnow, Cloudy, Thermometer, Clock, Calendar } from 'lucide-react';
+import { CloudRain, Droplets, Calendar, Sunrise, Sun, Sunset } from 'lucide-react';
 
 const WeatherCard = ({ weatherInfo, location, query = '' }) => {
   // Determine forecast date based on query
@@ -36,167 +36,151 @@ const WeatherCard = ({ weatherInfo, location, query = '' }) => {
   
   const forecastDate = getForecastDate();
   const dateStr = forecastDate.toLocaleDateString('en-IN', { 
+    weekday: 'short',
     day: 'numeric', 
-    month: 'short', 
-    year: 'numeric' 
+    month: 'short'
   });
   
-  // For weather forecasts, use typical daytime forecast time (12:00 PM)
-  // Unless it's today and current time is past noon, then use current time
-  const now = new Date();
-  const isTodayForecast = forecastDate.toDateString() === now.toDateString();
-  
-  let timeStr;
-  if (isTodayForecast && now.getHours() >= 12) {
-    // Show current time for today's forecast after noon
-    timeStr = now.toLocaleTimeString('en-IN', { 
-      hour: '2-digit', 
-      minute: '2-digit',
-      hour12: true 
-    });
-  } else {
-    // Show noon (12:00 PM) for future forecasts - standard weather forecast time
-    timeStr = '12:00 PM';
-  }
-  
-  // Parse weather information from the text to extract key data
+  // Parse weather information from the text to extract rainfall data
   const parseWeatherData = (text) => {
-    // Extract temperature (look for patterns like "30°C" or "30 degrees")
-    const tempMatch = text.match(/(\d+)[\s]*(?:°C|degrees|celsius)/i);
-    const temperature = tempMatch ? tempMatch[1] : null;
-    
-    // Extract weather condition
-    const weatherConditions = {
-      'sunny': { icon: Sun, color: 'text-yellow-500', bg: 'bg-yellow-50' },
-      'clear': { icon: Sun, color: 'text-yellow-500', bg: 'bg-yellow-50' },
-      'rain': { icon: CloudRain, color: 'text-blue-600', bg: 'bg-blue-50' },
-      'rainy': { icon: CloudRain, color: 'text-blue-600', bg: 'bg-blue-50' },
-      'cloud': { icon: Cloud, color: 'text-gray-500', bg: 'bg-gray-50' },
-      'overcast': { icon: Cloud, color: 'text-gray-500', bg: 'bg-gray-50' },
-      'drizzle': { icon: CloudDrizzle, color: 'text-blue-400', bg: 'bg-blue-50' },
-      'partly': { icon: Cloudy, color: 'text-gray-400', bg: 'bg-gray-50' }
-    };
-    
-    let weatherType = { icon: Cloud, color: 'text-blue-500', bg: 'bg-blue-50' };
-    const lowerText = text.toLowerCase();
-    
-    for (const [key, value] of Object.entries(weatherConditions)) {
-      if (lowerText.includes(key)) {
-        weatherType = value;
-        break;
-      }
-    }
-    
     // Extract rainfall percentage
     const rainMatch = text.match(/(\d+)[\s]*%[\s]*(?:rain|chance|precipitation)/i);
-    const rainfallChance = rainMatch ? rainMatch[1] : null;
-    
-    // Check for wind info
-    const windMatch = text.match(/wind[^\d]*(\d+)[\s]*(?:km\/h|kmph|mph)/i);
-    const windSpeed = windMatch ? windMatch[1] : null;
-    
-    // Check for humidity
-    const humidityMatch = text.match(/humidity[^\d]*(\d+)[\s]*%/i);
-    const humidity = humidityMatch ? humidityMatch[1] : null;
+    const rainfallChance = rainMatch ? parseInt(rainMatch[1]) : null;
     
     return {
-      temperature,
-      weatherType,
       rainfallChance,
-      windSpeed,
-      humidity,
       fullText: text
     };
   };
   
   const weatherData = parseWeatherData(weatherInfo);
-  const WeatherIcon = weatherData.weatherType.icon;
+  const rainChance = weatherData.rainfallChance || 0;
+  
+  // Determine rainfall category
+  const getRainfallCategory = (chance) => {
+    if (chance >= 70) return { 
+      level: 'High', 
+      color: 'text-blue-700', 
+      bg: 'bg-blue-50', 
+      borderColor: 'border-blue-300',
+      icon: CloudRain,
+      advice: 'High chance of rain. Postpone irrigation and pesticide spraying.'
+    };
+    if (chance >= 40) return { 
+      level: 'Moderate', 
+      color: 'text-blue-600', 
+      bg: 'bg-blue-50', 
+      borderColor: 'border-blue-200',
+      icon: CloudRain,
+      advice: 'Moderate rain chance. Plan field activities carefully.'
+    };
+    if (chance >= 20) return { 
+      level: 'Low', 
+      color: 'text-gray-600', 
+      bg: 'bg-gray-50', 
+      borderColor: 'border-gray-200',
+      icon: Droplets,
+      advice: 'Low rain chance. Good for most farming activities.'
+    };
+    return { 
+      level: 'Very Low', 
+      color: 'text-gray-500', 
+      bg: 'bg-gray-50', 
+      borderColor: 'border-gray-200',
+      icon: Droplets,
+      advice: 'Very low rain chance. Ideal for irrigation and spraying.'
+    };
+  };
+  
+  const category = getRainfallCategory(rainChance);
+  const RainIcon = category.icon;
   
   return (
-    <div className={`${weatherData.weatherType.bg} rounded-xl p-4 border border-gray-200 shadow-sm`}>
-      {/* Location Header */}
-      <div className="flex items-center justify-between mb-3">
+    <div className="bg-white rounded-xl p-4 border-2 border-blue-200 shadow-lg">
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="font-semibold text-gray-800 text-sm">Weather</h3>
+          <h3 className="font-bold text-gray-800 text-base">Rainfall Forecast</h3>
           {location && (
             <p className="text-xs text-gray-600 mt-0.5">{location}</p>
           )}
         </div>
-        <div className={`w-12 h-12 rounded-full ${weatherData.weatherType.bg} flex items-center justify-center border-2 border-white shadow-sm`}>
-          <WeatherIcon className={`w-7 h-7 ${weatherData.weatherType.color}`} />
-        </div>
-      </div>
-
-      {/* Date and Time */}
-      <div className="flex items-center gap-3 mb-3 text-xs text-gray-600">
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1 text-xs text-gray-600">
           <Calendar className="w-3.5 h-3.5" />
           <span>{dateStr}</span>
         </div>
-        <div className="flex items-center gap-1">
-          <Clock className="w-3.5 h-3.5" />
-          <span>{timeStr}</span>
+      </div>
+
+      {/* Main Rainfall Display */}
+      <div className={`${category.bg} rounded-xl p-6 border-2 ${category.borderColor} mb-4`}>
+        <div className="flex flex-col items-center">
+          <RainIcon className={`w-12 h-12 ${category.color} mb-2`} />
+          <p className="text-5xl font-bold text-gray-800 mb-1">{rainChance}%</p>
+          <p className={`text-sm font-semibold ${category.color}`}>Chance of Rain</p>
+          <p className="text-xs text-gray-600 mt-1">{category.level} Probability</p>
         </div>
       </div>
 
-      {/* Main Weather Display */}
-      <div className="bg-white rounded-xl p-3.5 shadow-sm mb-3">
-        <div className="grid grid-cols-2 gap-2.5">
-          {/* Temperature */}
-          {weatherData.temperature && (
-            <div className="flex flex-col items-center justify-center p-2.5 bg-gradient-to-br from-orange-50 to-red-50 rounded-lg border border-orange-100">
-              <Thermometer className="w-5 h-5 text-orange-500 mb-1" />
-              <span className="text-2xl font-bold text-gray-800">{weatherData.temperature}°</span>
-              <span className="text-xs text-gray-600">Temperature</span>
+      {/* Time-based Rainfall Indicators */}
+      <div className="mb-4">
+        <p className="text-xs font-semibold text-gray-700 mb-2">Expected Throughout Day</p>
+        <div className="grid grid-cols-3 gap-2">
+          {/* Morning */}
+          <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-lg p-3 border border-orange-200">
+            <div className="flex flex-col items-center">
+              <Sunrise className="w-5 h-5 text-orange-500 mb-1" />
+              <p className="text-xs text-gray-700 font-medium mb-1">Morning</p>
+              <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                <div 
+                  className="bg-blue-500 h-2 rounded-full transition-all" 
+                  style={{ width: `${Math.max(rainChance - 10, 0)}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-600">{Math.max(rainChance - 10, 0)}%</p>
             </div>
-          )}
+          </div>
           
-          {/* Rainfall Chance */}
-          {weatherData.rainfallChance && (
-            <div className="flex flex-col items-center justify-center p-2.5 bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg border border-blue-100">
-              <Droplets className="w-5 h-5 text-blue-500 mb-1" />
-              <span className="text-2xl font-bold text-gray-800">{weatherData.rainfallChance}%</span>
-              <span className="text-xs text-gray-600">Rainfall</span>
+          {/* Afternoon */}
+          <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-lg p-3 border border-yellow-200">
+            <div className="flex flex-col items-center">
+              <Sun className="w-5 h-5 text-yellow-500 mb-1" />
+              <p className="text-xs text-gray-700 font-medium mb-1">Afternoon</p>
+              <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                <div 
+                  className="bg-blue-500 h-2 rounded-full transition-all" 
+                  style={{ width: `${rainChance}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-600">{rainChance}%</p>
             </div>
-          )}
+          </div>
           
-          {/* Wind Speed */}
-          {weatherData.windSpeed && (
-            <div className="flex flex-col items-center justify-center p-2.5 bg-gradient-to-br from-cyan-50 to-teal-50 rounded-lg border border-cyan-100">
-              <Wind className="w-5 h-5 text-cyan-600 mb-1" />
-              <span className="text-2xl font-bold text-gray-800">{weatherData.windSpeed}</span>
-              <span className="text-xs text-gray-600">Wind (km/h)</span>
+          {/* Evening */}
+          <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg p-3 border border-purple-200">
+            <div className="flex flex-col items-center">
+              <Sunset className="w-5 h-5 text-purple-500 mb-1" />
+              <p className="text-xs text-gray-700 font-medium mb-1">Evening</p>
+              <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
+                <div 
+                  className="bg-blue-500 h-2 rounded-full transition-all" 
+                  style={{ width: `${Math.min(rainChance + 5, 100)}%` }}
+                />
+              </div>
+              <p className="text-xs text-gray-600">{Math.min(rainChance + 5, 100)}%</p>
             </div>
-          )}
-          
-          {/* Humidity */}
-          {weatherData.humidity && (
-            <div className="flex flex-col items-center justify-center p-2.5 bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg border border-purple-100">
-              <Droplets className="w-5 h-5 text-purple-500 mb-1" />
-              <span className="text-2xl font-bold text-gray-800">{weatherData.humidity}%</span>
-              <span className="text-xs text-gray-600">Humidity</span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Condensed Text Info (only if contains agricultural advice) */}
-      {(weatherData.fullText.toLowerCase().includes('farm') || 
-        weatherData.fullText.toLowerCase().includes('crop') ||
-        weatherData.fullText.toLowerCase().includes('agricult')) && (
-        <div className="bg-green-50 rounded-lg p-2.5 border border-green-100">
-          <div className="flex items-start gap-2">
-            <div className="w-1.5 h-1.5 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
-            <p className="text-xs text-green-800 leading-relaxed">
-              {weatherData.fullText.split('\n').find(line => 
-                line.toLowerCase().includes('farm') || 
-                line.toLowerCase().includes('crop') ||
-                line.toLowerCase().includes('agricult')
-              ) || 'Check forecast for farming activities'}
-            </p>
           </div>
         </div>
-      )}
+      </div>
+
+      {/* Farming Advice */}
+      <div className="bg-green-50 rounded-lg p-3 border-l-4 border-green-500">
+        <div className="flex items-start gap-2">
+          <div className="w-1.5 h-1.5 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
+          <p className="text-xs text-green-800 leading-relaxed font-medium">
+            {category.advice}
+          </p>
+        </div>
+      </div>
     </div>
   );
 };

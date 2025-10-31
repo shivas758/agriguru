@@ -631,8 +631,14 @@ class MarketPriceDB {
           arrival_quantity: parseFloat(
             record.Arrivals_in_Quintal || 
             record.arrivals_in_quintal ||
+            record.Arrivals_in_quintal ||
+            record['Arrivals (in Quintal)'] ||
             record.Arrivals || 
             record.arrivals ||
+            record.Arrival ||
+            record.arrival ||
+            record.arrival_quantity ||
+            record.Arrival_Quantity ||
             0
           ),
           data_source: 'api_cache'

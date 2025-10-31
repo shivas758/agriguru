@@ -463,9 +463,24 @@ function App() {
           formattedData.sort((a, b) => {
             const quantityA = a.arrivalQuantity || 0;
             const quantityB = b.arrivalQuantity || 0;
-            return quantityB - quantityA; // Descending order (highest volume first)
+            
+            // Prioritize items with arrival data (> 0) over items without
+            const hasDataA = quantityA > 0;
+            const hasDataB = quantityB > 0;
+            
+            if (hasDataA && !hasDataB) return -1; // A has data, B doesn't - A comes first
+            if (!hasDataA && hasDataB) return 1;  // B has data, A doesn't - B comes first
+            
+            // Both have data or both don't have data - sort by quantity descending
+            return quantityB - quantityA;
           });
           console.log('Market-wide query: Sorted by arrival quantity (trading volume)');
+          
+          // Count how many have arrival data
+          const withData = formattedData.filter(item => (item.arrivalQuantity || 0) > 0).length;
+          const withoutData = formattedData.length - withData;
+          console.log(`📊 Commodities: ${withData} with arrival data, ${withoutData} without`);
+          
           // Log top 5 commodities by volume for debugging
           if (formattedData.length > 0) {
             console.log('Top 5 commodities by trading volume:');

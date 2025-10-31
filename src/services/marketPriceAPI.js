@@ -71,6 +71,7 @@ class MarketPriceAPI {
         console.log('Number of records returned:', response.data.records.length);
         if (response.data.records.length > 0) {
           console.log('Sample record:', response.data.records[0]);
+          console.log('Sample record keys:', Object.keys(response.data.records[0]));
         } else {
           console.log('⚠️ API returned 0 records. This could mean:');
           console.log('  1. No data available for these filters');
@@ -378,12 +379,18 @@ class MarketPriceAPI {
       arrivalDate: record.Arrival_Date || record.arrival_date,
       grade: record.Grade || record.grade || 'N/A',
       // Capture arrival quantity for trading volume - API may have fields like:
-      // Arrivals_in_Quintal, arrivals, Arrivals, etc.
+      // Arrivals_in_Quintal, arrivals, Arrivals, Arrival, etc.
       arrivalQuantity: parseFloat(
         record.Arrivals_in_Quintal || 
         record.arrivals_in_quintal ||
+        record.Arrivals_in_quintal ||
+        record['Arrivals (in Quintal)'] ||
         record.Arrivals || 
         record.arrivals ||
+        record.Arrival ||
+        record.arrival ||
+        record.arrival_quantity ||
+        record.Arrival_Quantity ||
         0
       ),
       unit: 'Quintal' // Usually prices are per quintal
