@@ -55,8 +55,12 @@ CREATE INDEX IF NOT EXISTS idx_market_prices_location ON market_prices(state, di
 CREATE INDEX IF NOT EXISTS idx_market_prices_query 
   ON market_prices(arrival_date DESC, commodity, state, district);
 
--- Index for market-specific queries
-CREATE INDEX IF NOT EXISTS idx_market_prices_market ON market_prices(market);
+-- Index for market-specific queries (case-insensitive)
+CREATE INDEX IF NOT EXISTS idx_market_prices_market ON market_prices(LOWER(market));
+
+-- Index for state/district (case-insensitive)
+CREATE INDEX IF NOT EXISTS idx_market_prices_state_lower ON market_prices(LOWER(state));
+CREATE INDEX IF NOT EXISTS idx_market_prices_district_lower ON market_prices(LOWER(district));
 
 -- Index for data source tracking
 CREATE INDEX IF NOT EXISTS idx_market_prices_source ON market_prices(data_source);
@@ -64,6 +68,13 @@ CREATE INDEX IF NOT EXISTS idx_market_prices_source ON market_prices(data_source
 -- Full-text search index (optional, for fuzzy commodity search)
 CREATE INDEX IF NOT EXISTS idx_market_prices_commodity_gin 
   ON market_prices USING gin(to_tsvector('english', commodity));
+
+-- Enable pg_trgm extension for fuzzy text matching (spelling variations)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- Trigram index for fuzzy market name matching (handles typos/spelling variations)
+CREATE INDEX IF NOT EXISTS idx_market_prices_market_trgm ON market_prices USING gin(market gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_market_prices_district_trgm ON market_prices USING gin(district gin_trgm_ops);
 
 -- ============================================================================
 -- TABLE 2: sync_status (Monitoring daily sync jobs)
@@ -457,6 +468,60 @@ END;
 $$ LANGUAGE plpgsql;
 
 COMMENT ON FUNCTION cleanup_old_data IS 'Cleanup data older than specified days (default: 1 year)';
+
+-- ============================================================================
+-- FUZZY SEARCH FUNCTIONS (Handle spelling variations)
+-- ============================================================================
+
+-- Function for fuzzy market name search using trigram similarity
+CREATE OR REPLACE FUNCTION search_market_fuzzy(
+  search_market TEXT,
+  search_commodity TEXT DEFAULT NULL,
+  start_date DATE DEFAULT NULL,
+  end_date DATE DEFAULT NULL,
+  similarity_threshold FLOAT DEFAULT 0.3
+)
+RETURNS TABLE (
+  arrival_date DATE,
+  modal_price DECIMAL,
+  min_price DECIMAL,
+  max_price DECIMAL,
+  commodity TEXT,
+  variety TEXT,
+  grade TEXT,
+  market TEXT,
+  district TEXT,
+  state TEXT,
+  arrival_quantity DECIMAL
+) AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    mp.arrival_date,
+    mp.modal_price,
+    mp.min_price,
+    mp.max_price,
+    mp.commodity,
+    mp.variety,
+    mp.grade,
+    mp.market,
+    mp.district,
+    mp.state,
+    mp.arrival_quantity
+  FROM market_prices mp
+  WHERE 
+    similarity(mp.market, search_market) > similarity_threshold
+    AND (start_date IS NULL OR mp.arrival_date >= start_date)
+    AND (end_date IS NULL OR mp.arrival_date < end_date)
+    AND (search_commodity IS NULL OR mp.commodity ILIKE '%' || search_commodity || '%')
+  ORDER BY 
+    similarity(mp.market, search_market) DESC,
+    mp.arrival_date ASC
+  LIMIT 1000;
+END;
+$$ LANGUAGE plpgsql;
+
+COMMENT ON FUNCTION search_market_fuzzy IS 'Fuzzy search for market names to handle typos and spelling variations (e.g., Ravulapalem vs Ravulapelem)';
 
 -- ============================================================================
 -- END OF SCHEMA

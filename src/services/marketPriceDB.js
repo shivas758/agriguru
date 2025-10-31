@@ -92,7 +92,7 @@ class MarketPriceDB {
   }
 
   /**
-   * Get historical prices (from database)
+   * Get historical prices (from database) with fuzzy market matching
    */
   async getHistoricalPrices(params) {
     if (!isSupabaseConfigured()) {
@@ -103,7 +103,23 @@ class MarketPriceDB {
     try {
       const { commodity, state, district, market, date, limit = 100 } = params;
       
-      // Build query
+      // If market is specified, try fuzzy matching first
+      if (market) {
+        const fuzzyResult = await this.queryWithFuzzyMarket({
+          commodity,
+          state,
+          district,
+          market,
+          date,
+          limit
+        });
+        
+        if (fuzzyResult.success && fuzzyResult.data.length > 0) {
+          return fuzzyResult;
+        }
+      }
+      
+      // Build standard query (fallback or no market specified)
       let query = supabase
         .from('market_prices')
         .select('*');
@@ -170,6 +186,100 @@ class MarketPriceDB {
   }
 
   /**
+   * Helper: Query with fuzzy market name matching
+   */
+  async queryWithFuzzyMarket(params) {
+    const { commodity, market, date, limit = 100 } = params;
+    
+    try {
+      // Try exact match first
+      let exactQuery = supabase
+        .from('market_prices')
+        .select('*')
+        .ilike('market', market);
+      
+      if (date) {
+        exactQuery = exactQuery.eq('arrival_date', date);
+      } else {
+        const thirtyDaysAgo = new Date();
+        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+        exactQuery = exactQuery.gte('arrival_date', thirtyDaysAgo.toISOString().split('T')[0]);
+      }
+      
+      if (commodity) {
+        exactQuery = exactQuery.ilike('commodity', `%${commodity}%`);
+      }
+      
+      exactQuery = exactQuery.order('arrival_date', { ascending: false }).limit(limit);
+      
+      const { data: exactData, error: exactError } = await exactQuery;
+      
+      if (!exactError && exactData && exactData.length > 0) {
+        console.log(`✅ Exact match found for market "${market}": ${exactData.length} records`);
+        return {
+          success: true,
+          data: this.transformDBToAPIFormat(exactData),
+          total: exactData.length,
+          fromCache: false,
+          source: 'database'
+        };
+      }
+      
+      // Try fuzzy search
+      console.log(`🔍 No exact match for "${market}", trying fuzzy search...`);
+      
+      const startDate = date || (() => {
+        const d = new Date();
+        d.setDate(d.getDate() - 30);
+        return d.toISOString().split('T')[0];
+      })();
+      
+      const endDate = date || new Date().toISOString().split('T')[0];
+      
+      const { data: fuzzyData, error: fuzzyError } = await supabase.rpc('search_market_fuzzy', {
+        search_market: market,
+        search_commodity: commodity || null,
+        start_date: startDate,
+        end_date: endDate,
+        similarity_threshold: 0.3
+      });
+      
+      if (!fuzzyError && fuzzyData && fuzzyData.length > 0) {
+        console.log(`✅ Fuzzy match found for "${market}": ${fuzzyData.length} records`);
+        
+        // Convert from RPC result to standard format
+        const formattedData = fuzzyData.map(row => ({
+          State: row.state || '',
+          District: row.district || '',
+          Market: row.market,
+          Commodity: row.commodity,
+          Variety: row.variety || '',
+          Grade: row.grade || '',
+          Min_Price: parseFloat(row.min_price) || 0,
+          Max_Price: parseFloat(row.max_price) || 0,
+          Modal_Price: parseFloat(row.modal_price) || 0,
+          Arrival_Date: row.arrival_date,
+          Arrival_Quantity: parseFloat(row.arrival_quantity) || 0
+        }));
+        
+        return {
+          success: true,
+          data: formattedData,
+          total: fuzzyData.length,
+          fromCache: false,
+          source: 'database_fuzzy'
+        };
+      }
+      
+      return { success: false, data: [] };
+      
+    } catch (error) {
+      console.error('Error in fuzzy market query:', error);
+      return { success: false, data: [] };
+    }
+  }
+
+  /**
    * Get price trends for a commodity over specified days
    */
   async getPriceTrends(params, days = 30) {
@@ -188,10 +298,10 @@ class MarketPriceDB {
       const startDateStr = startDate.toISOString().split('T')[0];
       const endDateStr = endDate.toISOString().split('T')[0];
       
-      // Build flexible query - prioritize market name over district
+      // Build query with similarity-based fuzzy matching
       let query = supabase
         .from('market_prices')
-        .select('arrival_date, modal_price, min_price, max_price, commodity')
+        .select('arrival_date, modal_price, min_price, max_price, commodity, market, district')
         .gte('arrival_date', startDateStr)
         .lt('arrival_date', endDateStr)
         .order('arrival_date', { ascending: true });
@@ -200,19 +310,66 @@ class MarketPriceDB {
         query = query.ilike('commodity', `%${commodity}%`);
       }
       
-      // If market name is provided, use it (most specific)
+      // If market name is provided, use fuzzy matching with similarity
       if (market) {
-        query = query.ilike('market', `%${market}%`);
-      } else {
-        // Otherwise use state and district with fuzzy matching
-        if (state) {
-          query = query.ilike('state', `%${state}%`);
+        // Try exact match first (case-insensitive)
+        const exactQuery = supabase
+          .from('market_prices')
+          .select('arrival_date, modal_price, min_price, max_price, commodity, market')
+          .gte('arrival_date', startDateStr)
+          .lt('arrival_date', endDateStr)
+          .ilike('market', market)
+          .order('arrival_date', { ascending: true })
+          .limit(1000);
+        
+        if (commodity) {
+          exactQuery.ilike('commodity', `%${commodity}%`);
         }
         
-        if (district) {
-          // Use ILIKE for fuzzy matching to handle district name variations
-          query = query.ilike('district', `%${district}%`);
+        const { data: exactData, error: exactError } = await exactQuery;
+        
+        // If exact match found, use it
+        if (!exactError && exactData && exactData.length > 0) {
+          const trendData = this.aggregateTrendData(exactData);
+          console.log(`✅ Exact match found for market "${market}": ${exactData.length} records`);
+          return {
+            success: true,
+            data: trendData,
+            source: 'database'
+          };
         }
+        
+        // Fall back to fuzzy similarity search
+        console.log(`🔍 No exact match for "${market}", trying fuzzy search...`);
+        const { data: fuzzyData, error: fuzzyError } = await supabase.rpc('search_market_fuzzy', {
+          search_market: market,
+          search_commodity: commodity || null,
+          start_date: startDateStr,
+          end_date: endDateStr,
+          similarity_threshold: 0.3
+        });
+        
+        if (!fuzzyError && fuzzyData && fuzzyData.length > 0) {
+          const trendData = this.aggregateTrendData(fuzzyData);
+          console.log(`✅ Fuzzy match found for "${market}": ${fuzzyData.length} records`);
+          return {
+            success: true,
+            data: trendData,
+            source: 'database'
+          };
+        }
+        
+        // If still no match, fall through to state/district search
+        console.log(`⚠️ No fuzzy match found for "${market}"`);
+      }
+      
+      // Fall back to state/district search
+      if (state) {
+        query = query.ilike('state', `%${state}%`);
+      }
+      
+      if (district) {
+        query = query.ilike('district', `%${district}%`);
       }
       
       const { data, error } = await query;
@@ -268,7 +425,7 @@ class MarketPriceDB {
   }
 
   /**
-   * Get last available price for a commodity
+   * Get last available price for a commodity with fuzzy matching
    */
   async getLastAvailablePrice(params) {
     if (!isSupabaseConfigured()) {
@@ -278,6 +435,26 @@ class MarketPriceDB {
     try {
       const { commodity, state, district, market } = params;
       
+      // If market is specified, try fuzzy matching first
+      if (market) {
+        const fuzzyResult = await this.queryWithFuzzyMarket({
+          commodity,
+          state,
+          district,
+          market,
+          limit: 10
+        });
+        
+        if (fuzzyResult.success && fuzzyResult.data.length > 0) {
+          return {
+            success: true,
+            data: fuzzyResult.data,
+            date: fuzzyResult.data[0].Arrival_Date
+          };
+        }
+      }
+      
+      // Fallback to standard query
       let query = supabase
         .from('market_prices')
         .select('*')
