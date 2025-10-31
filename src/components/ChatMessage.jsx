@@ -3,9 +3,9 @@ import { Volume2, User, Bot, MapPin, Package, Calendar, TrendingUp, Navigation, 
 import voiceService from '../services/voiceService';
 import commodityImageService from '../services/commodityImageService';
 import marketImageService from '../services/marketImageService';
-import marketTrendImageService from '../services/marketTrendImageService';
 import PriceTrendCard from './PriceTrendCard';
 import WeatherCard from './WeatherCard';
+import MarketTrendCard from './MarketTrendCard';
 
 // Helper function to parse DD/MM/YYYY or DD-MM-YYYY format
 const parseDate = (dateStr) => {
@@ -114,7 +114,6 @@ const ChatMessage = ({ message, onSpeak }) => {
   const isNearbyResult = message.isNearbyResult;
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [generatedImages, setGeneratedImages] = useState(null);
-  const [generatedTrendImages, setGeneratedTrendImages] = useState(null);
 
   const handleSpeak = () => {
     if (onSpeak) {
@@ -131,12 +130,7 @@ const ChatMessage = ({ message, onSpeak }) => {
     }
   }, [message]);
 
-  // Auto-generate trend images for market-wide trends
-  React.useEffect(() => {
-    if (message.trendsData && !generatedTrendImages && !isGeneratingImage) {
-      generateTrendImages();
-    }
-  }, [message]);
+  // No longer generating trend images - using MarketTrendCard component instead
 
   const generateMarketImages = async () => {
     if (!message.fullPriceData || message.fullPriceData.length === 0) {
@@ -159,26 +153,6 @@ const ChatMessage = ({ message, onSpeak }) => {
     }
   };
 
-  const generateTrendImages = async () => {
-    if (!message.trendsData) {
-      return;
-    }
-
-    setIsGeneratingImage(true);
-    
-    try {
-      const imageDataUrls = await marketTrendImageService.generateTrendImages(
-        message.trendsData,
-        message.marketInfo || {}
-      );
-      
-      setGeneratedTrendImages(imageDataUrls);
-    } catch (error) {
-      console.error('Error generating trend images:', error);
-    } finally {
-      setIsGeneratingImage(false);
-    }
-  };
 
   const renderDisambiguationOptions = () => {
     if (!message.disambiguationOptions) return null;
@@ -283,28 +257,13 @@ const ChatMessage = ({ message, onSpeak }) => {
           </div>
         ) : null}
         
-        {/* Show trend images for market-wide trends */}
+        {/* Show trend card for market-wide trends */}
         {message.trendsData ? (
           <div className="mt-3">
-            {isGeneratingImage ? (
-              <div className="flex items-center justify-center gap-2.5 py-10 bg-gray-50 rounded-lg border border-gray-200">
-                <Loader2 className="w-5 h-5 animate-spin text-primary-600" />
-                <span className="text-gray-600 text-sm">Generating trend images...</span>
-              </div>
-            ) : generatedTrendImages ? (
-              <div className="space-y-4">
-                {generatedTrendImages.map((imageUrl, index) => (
-                  <div key={index} className="rounded-lg border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition-shadow">
-                    <img 
-                      src={imageUrl} 
-                      alt={`Market trends page ${index + 1}`}
-                      className="w-full h-auto"
-                      style={{ display: 'block' }}
-                    />
-                  </div>
-                ))}
-              </div>
-            ) : null}
+            <MarketTrendCard 
+              trendsData={message.trendsData}
+              marketInfo={message.marketInfo || {}}
+            />
           </div>
         ) : null}
         

@@ -53,7 +53,7 @@ class MarketPriceDB {
   }
 
   /**
-   * Get today's prices (from API with caching)
+   * Get today's prices (from API with caching, DB check with fuzzy search)
    */
   async getTodayPrices(params) {
     // Check in-memory cache first
@@ -70,7 +70,34 @@ class MarketPriceDB {
       };
     }
 
-    // Fetch from API
+    // Check database first (with fuzzy matching for markets)
+    if (isSupabaseConfigured() && params.market) {
+      console.log('🔍 Checking database for today\'s data with fuzzy search...');
+      const dbResult = await this.queryWithFuzzyMarket({
+        ...params,
+        date: this.getTodayDate()
+      });
+      
+      if (dbResult.success && dbResult.data.length > 0) {
+        console.log(`✅ Found ${dbResult.data.length} records in database (today's data)`);
+        
+        // Cache in memory
+        this.todayCache.set(cacheKey, {
+          data: dbResult.data,
+          timestamp: Date.now()
+        });
+        
+        return {
+          success: true,
+          data: dbResult.data,
+          total: dbResult.data.length,
+          fromCache: false,
+          source: 'database'
+        };
+      }
+    }
+
+    // Fetch from API as fallback
     console.log('Fetching today\'s data from API...');
     const response = await marketPriceAPI.fetchMarketPrices(params);
     
@@ -228,13 +255,21 @@ class MarketPriceDB {
       // Try fuzzy search
       console.log(`🔍 No exact match for "${market}", trying fuzzy search...`);
       
-      const startDate = date || (() => {
+      let startDate, endDate;
+      
+      if (date) {
+        // For specific date, set range as [date, date+1)
+        startDate = date;
+        const nextDay = new Date(date);
+        nextDay.setDate(nextDay.getDate() + 1);
+        endDate = nextDay.toISOString().split('T')[0];
+      } else {
+        // For date range, last 30 days
         const d = new Date();
         d.setDate(d.getDate() - 30);
-        return d.toISOString().split('T')[0];
-      })();
-      
-      const endDate = date || new Date().toISOString().split('T')[0];
+        startDate = d.toISOString().split('T')[0];
+        endDate = new Date().toISOString().split('T')[0];
+      }
       
       const { data: fuzzyData, error: fuzzyError } = await supabase.rpc('search_market_fuzzy', {
         search_market: market,
@@ -330,8 +365,28 @@ class MarketPriceDB {
         
         // If exact match found, use it
         if (!exactError && exactData && exactData.length > 0) {
-          const trendData = this.aggregateTrendData(exactData);
           console.log(`✅ Exact match found for market "${market}": ${exactData.length} records`);
+          
+          // For market-wide (no commodity), return raw data with commodity info
+          if (!commodity) {
+            const rawData = exactData.map(row => ({
+              arrival_date: row.arrival_date,
+              modal_price: parseFloat(row.modal_price) || 0,
+              min_price: parseFloat(row.min_price) || 0,
+              max_price: parseFloat(row.max_price) || 0,
+              commodity: row.commodity
+            }));
+            
+            return {
+              success: true,
+              data: rawData,
+              isRawData: true, // Flag to indicate raw data
+              source: 'database'
+            };
+          }
+          
+          // For specific commodity, aggregate by date
+          const trendData = this.aggregateTrendData(exactData);
           return {
             success: true,
             data: trendData,
@@ -350,8 +405,28 @@ class MarketPriceDB {
         });
         
         if (!fuzzyError && fuzzyData && fuzzyData.length > 0) {
-          const trendData = this.aggregateTrendData(fuzzyData);
           console.log(`✅ Fuzzy match found for "${market}": ${fuzzyData.length} records`);
+          
+          // For market-wide (no commodity), return raw data grouped by commodity
+          if (!commodity) {
+            const rawData = fuzzyData.map(row => ({
+              arrival_date: row.arrival_date,
+              modal_price: parseFloat(row.modal_price) || 0,
+              min_price: parseFloat(row.min_price) || 0,
+              max_price: parseFloat(row.max_price) || 0,
+              commodity: row.commodity
+            }));
+            
+            return {
+              success: true,
+              data: rawData,
+              isRawData: true, // Flag to indicate raw data
+              source: 'database'
+            };
+          }
+          
+          // For specific commodity, aggregate by date
+          const trendData = this.aggregateTrendData(fuzzyData);
           return {
             success: true,
             data: trendData,

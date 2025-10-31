@@ -12,7 +12,6 @@ import marketPriceDB from './services/marketPriceDB';
 import geminiService from './services/geminiService';
 import voiceService from './services/voiceService';
 import priceTrendService from './services/priceTrendService';
-import marketTrendImageService from './services/marketTrendImageService';
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -334,16 +333,9 @@ function App() {
             state: intent.location.state
           };
           
-          // Generate trend images
-          console.log('Generating market trend images...');
-          const imageResult = await marketTrendImageService.generateTrendImages(
-            trendResult.trends,
-            marketInfo
-          );
-          
           const summaryText = queryLanguage === 'hi'
-            ? `${marketInfo.market || marketInfo.district} बाजार के ${trendResult.trends.commodities.length} वस्तुओं के लिए कीमत ट्रेंड (पिछले 30 दिन):`
-            : `Price trends for ${trendResult.trends.commodities.length} commodities in ${marketInfo.market || marketInfo.district} market (last 30 days):`;
+            ? `${marketInfo.market || marketInfo.district} बाजार के ${trendResult.commodities.length} वस्तुओं के लिए कीमत ट्रेंड (पिछले 30 दिन):`
+            : `Price trends for ${trendResult.commodities.length} commodities in ${marketInfo.market || marketInfo.district} market (last 30 days):`;
           
           const botMessage = {
             id: Date.now() + 1,
@@ -351,9 +343,8 @@ function App() {
             text: summaryText,
             timestamp: new Date(),
             language: queryLanguage,
-            trendImages: imageResult,
             marketInfo: marketInfo,
-            trendsData: trendResult.trends
+            trendsData: { commodities: trendResult.commodities } // Data for MarketTrendCard component
           };
           
           setMessages(prev => [...prev, botMessage]);
@@ -492,9 +483,23 @@ function App() {
         const requestedMarket = intent.location.market?.toLowerCase();
         const requestedCommodity = intent.commodity?.toLowerCase();
         
-        const hasMatchingLocation = formattedData.some(item => {
-          const matchesDistrict = !requestedDistrict || item.district.toLowerCase().includes(requestedDistrict);
-          const matchesMarket = !requestedMarket || item.market.toLowerCase().includes(requestedMarket);
+        // Skip location validation if data came from fuzzy search
+        // (fuzzy search already validated the match)
+        const isFuzzyMatch = response.source === 'database_fuzzy';
+        
+        const hasMatchingLocation = isFuzzyMatch || formattedData.some(item => {
+          // Bidirectional fuzzy matching for market/district names
+          const itemDistrict = item.district.toLowerCase();
+          const itemMarket = item.market.toLowerCase();
+          
+          const matchesDistrict = !requestedDistrict || 
+            itemDistrict.includes(requestedDistrict) || 
+            requestedDistrict.includes(itemDistrict);
+            
+          const matchesMarket = !requestedMarket || 
+            itemMarket.includes(requestedMarket) || 
+            requestedMarket.includes(itemMarket);
+            
           return matchesDistrict && matchesMarket;
         });
         

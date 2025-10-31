@@ -443,7 +443,7 @@ class PriceTrendService {
       const dbTrends = await marketPriceDB.getPriceTrends(params, this.maxDays);
       
       if (dbTrends && dbTrends.success && dbTrends.data && dbTrends.data.length >= 2) {
-        console.log(`✅ Got ${dbTrends.data.length} days of trend data from database`);
+        console.log(`✅ Got ${dbTrends.data.length} records from database`);
         
         // If specific commodity requested
         if (params.commodity) {
@@ -470,16 +470,73 @@ class PriceTrendService {
               source: 'database'
             };
           }
-        } else {
-          // Market-wide trends - return summary of all commodities
-          console.log('✅ Got market-wide trend data from database');
-          return {
-            success: true,
-            type: 'market_wide',
-            data: dbTrends.data,
-            daysAvailable: dbTrends.data.length,
-            source: 'database'
-          };
+        } else if (dbTrends.isRawData) {
+          // Market-wide trends with raw data - process each commodity
+          console.log('✅ Processing market-wide trend data from database');
+          
+          // Group raw data by commodity
+          const byCommodity = {};
+          dbTrends.data.forEach(record => {
+            const commodity = record.commodity;
+            if (!byCommodity[commodity]) {
+              byCommodity[commodity] = [];
+            }
+            byCommodity[commodity].push(record);
+          });
+          
+          // Calculate trends for each commodity
+          const commodityTrends = [];
+          for (const [commodity, records] of Object.entries(byCommodity)) {
+            // Group by date for this commodity
+            const byDate = {};
+            records.forEach(r => {
+              const date = r.arrival_date;
+              if (!byDate[date]) {
+                byDate[date] = { prices: [], min_prices: [], max_prices: [] };
+              }
+              byDate[date].prices.push(r.modal_price);
+              byDate[date].min_prices.push(r.min_price);
+              byDate[date].max_prices.push(r.max_price);
+            });
+            
+            // Create historical data format
+            const historicalData = Object.keys(byDate).sort().map(date => ({
+              cache_date: date,
+              price_data: [{
+                Commodity: commodity,
+                Modal_Price: Math.round(byDate[date].prices.reduce((a, b) => a + b, 0) / byDate[date].prices.length),
+                Min_Price: Math.round(Math.min(...byDate[date].min_prices)),
+                Max_Price: Math.round(Math.max(...byDate[date].max_prices))
+              }]
+            }));
+            
+            // Calculate trend for this commodity
+            if (historicalData.length >= 2) {
+              const trend = this.calculateCommodityTrend(historicalData, commodity);
+              if (trend) {
+                // Flatten the structure for image generation
+                commodityTrends.push({
+                  commodity,
+                  currentPrice: trend.currentPrice,
+                  priceChange: trend.priceChange,
+                  percentChange: trend.percentChange,
+                  direction: trend.direction,
+                  daysAvailable: historicalData.length,
+                  trend: trend // Keep nested for backward compatibility
+                });
+              }
+            }
+          }
+          
+          if (commodityTrends.length > 0) {
+            return {
+              success: true,
+              type: 'market_wide',
+              commodities: commodityTrends,
+              totalCommodities: commodityTrends.length,
+              source: 'database'
+            };
+          }
         }
       }
       
