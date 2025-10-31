@@ -433,38 +433,59 @@ class PriceTrendService {
 
       // Try database first for faster results
       console.log('🔍 Trying database for price trends...');
+      console.log('Query params:', { 
+        commodity: params.commodity, 
+        market: params.market, 
+        district: params.district, 
+        state: params.state 
+      });
+      
       const dbTrends = await marketPriceDB.getPriceTrends(params, this.maxDays);
       
-      if (dbTrends && dbTrends.success && dbTrends.data && dbTrends.data.length > 0) {
+      if (dbTrends && dbTrends.success && dbTrends.data && dbTrends.data.length >= 2) {
         console.log(`✅ Got ${dbTrends.data.length} days of trend data from database`);
         
-        // Transform database trend data to match expected format
-        const historicalData = dbTrends.data.map(day => ({
-          cache_date: day.arrival_date,
-          price_data: [{
-            Commodity: params.commodity,
-            Modal_Price: day.avg_price,
-            Min_Price: day.min_price,
-            Max_Price: day.max_price
-          }]
-        }));
-        
-        const trend = this.calculateCommodityTrend(historicalData, params.commodity);
-        
-        if (trend) {
+        // If specific commodity requested
+        if (params.commodity) {
+          // Transform database trend data to match expected format
+          const historicalData = dbTrends.data.map(day => ({
+            cache_date: day.arrival_date,
+            price_data: [{
+              Commodity: params.commodity,
+              Modal_Price: day.avg_price,
+              Min_Price: day.min_price,
+              Max_Price: day.max_price
+            }]
+          }));
+          
+          const trend = this.calculateCommodityTrend(historicalData, params.commodity);
+          
+          if (trend) {
+            return {
+              success: true,
+              type: 'single_commodity',
+              trend,
+              summary: this.formatTrendSummary(trend),
+              daysAvailable: dbTrends.data.length,
+              source: 'database'
+            };
+          }
+        } else {
+          // Market-wide trends - return summary of all commodities
+          console.log('✅ Got market-wide trend data from database');
           return {
             success: true,
-            type: 'single_commodity',
-            trend,
-            summary: this.formatTrendSummary(trend),
+            type: 'market_wide',
+            data: dbTrends.data,
             daysAvailable: dbTrends.data.length,
             source: 'database'
           };
         }
       }
       
+      console.log(`📡 Database returned ${dbTrends?.data?.length || 0} days. Need at least 2 for trends. Trying cache+API...`);
+      
       // Fallback to cache+API approach if DB doesn't have data
-      console.log('📡 Database has limited data, fetching from cache+API...');
       const historicalResult = await this.fetchHistoricalData(params);
 
       if (!historicalResult.success || historicalResult.data.length === 0) {

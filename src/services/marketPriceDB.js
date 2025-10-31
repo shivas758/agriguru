@@ -170,30 +170,61 @@ class MarketPriceDB {
   }
 
   /**
-   * Get price trends from database
+   * Get price trends for a commodity over specified days
    */
   async getPriceTrends(params, days = 30) {
     if (!isSupabaseConfigured()) {
-      console.warn('Supabase not configured');
       return { success: false, data: [] };
     }
 
     try {
-      const { commodity, state, district } = params;
+      const { commodity, state, district, market } = params;
       
-      // Use the database function for efficient aggregation
-      const { data, error } = await supabase.rpc('get_price_trends', {
-        p_commodity: commodity,
-        p_state: state || null,
-        p_district: district || null,
-        p_days: days
-      });
+      // Calculate date range
+      const endDate = new Date();
+      const startDate = new Date();
+      startDate.setDate(endDate.getDate() - days);
+      
+      const startDateStr = startDate.toISOString().split('T')[0];
+      const endDateStr = endDate.toISOString().split('T')[0];
+      
+      // Build flexible query - prioritize market name over district
+      let query = supabase
+        .from('market_prices')
+        .select('arrival_date, modal_price, min_price, max_price, commodity')
+        .gte('arrival_date', startDateStr)
+        .lt('arrival_date', endDateStr)
+        .order('arrival_date', { ascending: true });
+      
+      if (commodity) {
+        query = query.ilike('commodity', `%${commodity}%`);
+      }
+      
+      // If market name is provided, use it (most specific)
+      if (market) {
+        query = query.ilike('market', `%${market}%`);
+      } else {
+        // Otherwise use state and district with fuzzy matching
+        if (state) {
+          query = query.ilike('state', `%${state}%`);
+        }
+        
+        if (district) {
+          // Use ILIKE for fuzzy matching to handle district name variations
+          query = query.ilike('district', `%${district}%`);
+        }
+      }
+      
+      const { data, error } = await query;
       
       if (error) throw error;
       
+      // Group by date and calculate averages
+      const trendData = this.aggregateTrendData(data);
+      
       return {
         success: true,
-        data: data || [],
+        data: trendData,
         source: 'database'
       };
       
@@ -201,6 +232,39 @@ class MarketPriceDB {
       console.error('Error getting price trends:', error);
       return { success: false, data: [], error: error.message };
     }
+  }
+
+  /**
+   * Aggregate price data by date for trends
+   */
+  aggregateTrendData(data) {
+    if (!data || data.length === 0) return [];
+    
+    const byDate = {};
+    
+    data.forEach(record => {
+      const date = record.arrival_date;
+      if (!byDate[date]) {
+        byDate[date] = {
+          prices: [],
+          min_prices: [],
+          max_prices: []
+        };
+      }
+      byDate[date].prices.push(parseFloat(record.modal_price) || 0);
+      byDate[date].min_prices.push(parseFloat(record.min_price) || 0);
+      byDate[date].max_prices.push(parseFloat(record.max_price) || 0);
+    });
+    
+    return Object.keys(byDate).map(date => ({
+      arrival_date: date,
+      avg_price: Math.round(
+        byDate[date].prices.reduce((a, b) => a + b, 0) / byDate[date].prices.length
+      ),
+      min_price: Math.round(Math.min(...byDate[date].min_prices)),
+      max_price: Math.round(Math.max(...byDate[date].max_prices)),
+      record_count: byDate[date].prices.length
+    })).sort((a, b) => a.arrival_date.localeCompare(b.arrival_date));
   }
 
   /**
