@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { getCropAliases } from '../config/cropAliases';
 
 const API_KEY = import.meta.env.VITE_DATA_GOV_API_KEY || '';
 // Variety-wise Daily Market Prices API (75M+ records, comprehensive data)
@@ -46,6 +47,31 @@ class MarketPriceAPI {
 
   async fetchMarketPrices(params = {}) {
     try {
+      // If commodity has aliases, try each one
+      if (params.commodity && params.commodityAliases && params.commodityAliases.length > 1) {
+        console.log(`🌾 Trying ${params.commodityAliases.length} commodity aliases:`, params.commodityAliases);
+        
+        for (const alias of params.commodityAliases) {
+          const aliasParams = { ...params, commodity: alias };
+          delete aliasParams.commodityAliases; // Remove to avoid recursion
+          
+          const response = await this.fetchMarketPrices(aliasParams);
+          
+          if (response.success && response.data.length > 0) {
+            console.log(`✅ Found data for alias "${alias}"`);
+            return response;
+          }
+        }
+        
+        // No alias worked
+        console.log('⚠️ No data found for any commodity alias');
+        return {
+          success: false,
+          data: [],
+          message: `No data found for ${params.commodity} or its aliases`
+        };
+      }
+      
       // First try with all filters
       let queryParams = {
         'api-key': this.apiKey,
@@ -157,13 +183,28 @@ class MarketPriceAPI {
     const thirtyDaysAgo = new Date(today);
     thirtyDaysAgo.setDate(today.getDate() - 30);
     
-    return records.filter(record => {
+    // Debug: Log first record's date to understand the format
+    if (records.length > 0) {
+      const firstRecord = records[0];
+      const sampleDate = firstRecord.Arrival_Date || firstRecord.arrival_date;
+      console.log(`📅 Sample arrival date from API: "${sampleDate}"`);
+    }
+    
+    let debugCount = 0; // Counter for debug logging
+    
+    const filtered = records.filter(record => {
       const arrivalDate = record.Arrival_Date || record.arrival_date;
-      if (!arrivalDate) return false;
+      if (!arrivalDate) {
+        console.log('⚠️ Record missing arrival date:', record);
+        return false;
+      }
       
       // Parse date from DD-MM-YYYY or DD/MM/YYYY format
       const dateParts = arrivalDate.split(/[-/]/);
-      if (dateParts.length !== 3) return false;
+      if (dateParts.length !== 3) {
+        console.log(`⚠️ Invalid date format: "${arrivalDate}"`);
+        return false;
+      }
       
       const day = parseInt(dateParts[0], 10);
       const month = parseInt(dateParts[1], 10) - 1; // Month is 0-indexed
@@ -172,10 +213,19 @@ class MarketPriceAPI {
       const recordDate = new Date(year, month, day);
       recordDate.setHours(0, 0, 0, 0); // Normalize to midnight for comparison
       
+      // Debug first few records
+      if (debugCount < 3) {
+        console.log(`📅 Parsed: "${arrivalDate}" → ${recordDate.toDateString()} | Range: ${thirtyDaysAgo.toDateString()} to ${today.toDateString()}`);
+        console.log(`   Valid: ${recordDate >= thirtyDaysAgo && recordDate <= today}`);
+        debugCount++;
+      }
+      
       // Include records from last 30 days INCLUDING today
       // thirtyDaysAgo <= recordDate <= today
       return recordDate >= thirtyDaysAgo && recordDate <= today;
     });
+    
+    return filtered;
   }
 
   buildFilters(params) {

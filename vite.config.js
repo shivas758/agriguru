@@ -1,11 +1,20 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
+import { resolve } from 'path'
 
 export default defineConfig({
   optimizeDeps: {
     force: true,
     include: ['@google/generative-ai']
+  },
+  build: {
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, 'index.html'),
+        upload: resolve(__dirname, 'public/upload.html')
+      }
+    }
   },
   plugins: [
     react(),

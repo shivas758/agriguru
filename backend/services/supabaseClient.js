@@ -155,15 +155,14 @@ export async function getLatestSyncStatus(limit = 10) {
  */
 export async function hasDataForDate(date) {
   try {
-    const { data, error } = await supabase
+    const { count, error } = await supabase
       .from('market_prices')
-      .select('count')
-      .eq('arrival_date', date)
-      .limit(1);
+      .select('*', { count: 'exact', head: true })
+      .eq('arrival_date', date);
     
     if (error) throw error;
     
-    return data && data.length > 0;
+    return count > 0;
   } catch (error) {
     logger.error('Error checking data existence', { error, date });
     return false;

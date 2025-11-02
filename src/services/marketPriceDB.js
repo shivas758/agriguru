@@ -12,6 +12,7 @@
 
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import marketPriceAPI from './marketPriceAPI';
+import { getCropAliases } from '../config/cropAliases';
 
 class MarketPriceDB {
   constructor() {
@@ -162,7 +163,13 @@ class MarketPriceDB {
       }
       
       if (commodity) {
-        query = query.ilike('commodity', `%${commodity}%`);
+        // Use crop aliases to search for all variations
+        const aliases = getCropAliases(commodity);
+        if (aliases.length > 1) {
+          query = query.or(aliases.map(alias => `commodity.ilike.%${alias}%`).join(','));
+        } else {
+          query = query.ilike('commodity', `%${commodity}%`);
+        }
       }
       
       if (state) {
@@ -234,7 +241,13 @@ class MarketPriceDB {
       }
       
       if (commodity) {
-        exactQuery = exactQuery.ilike('commodity', `%${commodity}%`);
+        // Use crop aliases to search for all variations
+        const aliases = getCropAliases(commodity);
+        if (aliases.length > 1) {
+          exactQuery = exactQuery.or(aliases.map(alias => `commodity.ilike.%${alias}%`).join(','));
+        } else {
+          exactQuery = exactQuery.ilike('commodity', `%${commodity}%`);
+        }
       }
       
       exactQuery = exactQuery.order('arrival_date', { ascending: false }).limit(limit);
@@ -342,7 +355,13 @@ class MarketPriceDB {
         .order('arrival_date', { ascending: true });
       
       if (commodity) {
-        query = query.ilike('commodity', `%${commodity}%`);
+        // Use crop aliases to search for all variations
+        const aliases = getCropAliases(commodity);
+        if (aliases.length > 1) {
+          query = query.or(aliases.map(alias => `commodity.ilike.%${alias}%`).join(','));
+        } else {
+          query = query.ilike('commodity', `%${commodity}%`);
+        }
       }
       
       // If market name is provided, use fuzzy matching with similarity
@@ -358,7 +377,13 @@ class MarketPriceDB {
           .limit(1000);
         
         if (commodity) {
-          exactQuery.ilike('commodity', `%${commodity}%`);
+          // Use crop aliases to search for all variations
+          const aliases = getCropAliases(commodity);
+          if (aliases.length > 1) {
+            exactQuery.or(aliases.map(alias => `commodity.ilike.%${alias}%`).join(','));
+          } else {
+            exactQuery.ilike('commodity', `%${commodity}%`);
+          }
         }
         
         const { data: exactData, error: exactError } = await exactQuery;
@@ -537,7 +562,13 @@ class MarketPriceDB {
         .limit(10);
       
       if (commodity) {
-        query = query.ilike('commodity', `%${commodity}%`);
+        // Use crop aliases to search for all variations
+        const aliases = getCropAliases(commodity);
+        if (aliases.length > 1) {
+          query = query.or(aliases.map(alias => `commodity.ilike.%${alias}%`).join(','));
+        } else {
+          query = query.ilike('commodity', `%${commodity}%`);
+        }
       }
       
       if (state) {

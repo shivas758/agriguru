@@ -1,14 +1,17 @@
 import express from 'express';
 import cron from 'node-cron';
+import cors from 'cors';
 import { config, validateConfig } from './config/config.js';
 import { logger } from './utils/logger.js';
 import { testConnection, getLatestSyncStatus, getDataStats } from './services/supabaseClient.js';
 import dailySyncService from './services/dailySyncService.js';
 import bulkImportService from './services/bulkImportService.js';
+import uploadRoutes from './routes/uploadRoutes.js';
 
 const app = express();
 
 // Middleware
+app.use(cors());
 app.use(express.json());
 
 // Health check endpoint
@@ -132,6 +135,9 @@ app.post('/api/import/bulk', async (req, res) => {
   }
 });
 
+// Upload routes (for feeders)
+app.use('/api/upload', uploadRoutes);
+
 // Start server
 async function startServer() {
   try {
@@ -165,6 +171,9 @@ async function startServer() {
       console.log(`  POST /api/sync/date             - Sync specific date`);
       console.log(`  POST /api/sync/backfill         - Backfill missing dates`);
       console.log(`  POST /api/import/bulk           - Bulk import (use with caution)`);
+      console.log(`  POST /api/upload/manual         - Manual data entry upload`);
+      console.log(`  POST /api/upload/batch          - Batch upload (OCR)`);
+      console.log(`  GET  /api/upload/recent         - Get recent uploads`);
       console.log('');
       console.log('Cron Jobs:');
       console.log(`  Daily Sync: ${config.sync.dailyTime} ${config.sync.timezone}`);

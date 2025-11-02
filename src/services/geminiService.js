@@ -1,5 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import marketPriceCache from './marketPriceCache';
+import { getCropAliases } from '../config/cropAliases';
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
@@ -208,9 +209,10 @@ FOR MARKET PRICE QUERIES (price_inquiry or market_overview):
     "district": "district name - INFER from market/city if needed",
     "state": "state name - INFER from market/city/district if needed"
   },
-  "date": "YYYY-MM-DD if mentioned, null otherwise",
+  "date": "YYYY-MM-DD if specific date mentioned, YYYY if only year mentioned, null otherwise",
   "queryType": "price_inquiry or market_overview",
-  "needsDisambiguation": false
+  "needsDisambiguation": false,
+  "isHistoricalQuery": true if asking about past dates/years (e.g., 2010, 2015, last year), false otherwise
 }
 
 EXAMPLES:
@@ -224,8 +226,11 @@ EXAMPLES:
 - "What are the benefits of organic farming?" → queryType: "general_agriculture"
 - "how much has cotton price changed in adoni this week?" → commodity: "cotton", market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", queryType: "price_trend", timePeriod: "week"
 - "price trends in bangalore market" → commodity: null, market: "Bangalore", district: "Bangalore Urban", state: "Karnataka", queryType: "price_trend", timePeriod: "month"
-- "tomato price in Adoni" → commodity: "tomato", market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", queryType: "price_inquiry"
-- "Pattikonda market prices" → commodity: null, market: "Pattikonda", district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview"
+- "tomato price in Adoni" → commodity: "tomato", market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", queryType: "price_inquiry", isHistoricalQuery: false
+- "Pattikonda market prices" → commodity: null, market: "Pattikonda", district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview", isHistoricalQuery: false
+- "What were the market prices of Adoni in 2010?" → commodity: null, market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", date: "2010", queryType: "market_overview", isHistoricalQuery: true
+- "onion prices in Bangalore in 2015" → commodity: "onion", market: "Bangalore", district: "Bangalore Urban", state: "Karnataka", date: "2015", queryType: "price_inquiry", isHistoricalQuery: true
+- "market prices last year in Delhi" → commodity: null, market: "Delhi", state: "Delhi", date: "[calculate last year as YYYY]", queryType: "market_overview", isHistoricalQuery: true
 
 CRITICAL FOR MARKET PRICE QUERIES:
 - Infer district and state from market/city names using your geography knowledge
@@ -252,6 +257,14 @@ JSON:`;
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const intent = JSON.parse(jsonMatch[0]);
+        
+        // Apply crop aliases to expand search
+        if (intent.commodity) {
+          const aliases = getCropAliases(intent.commodity);
+          intent.commodityAliases = aliases;
+          console.log(`🌾 Crop aliases for "${intent.commodity}":`, aliases);
+        }
+        
         // DEBUG: Commented for production
         // console.log('Parsed intent from Gemini:', intent);
         return intent;

@@ -385,6 +385,44 @@ function App() {
         }
       }
 
+      // Check if this is a historical query for old data
+      if (intent.isHistoricalQuery && intent.date) {
+        const dateStr = intent.date;
+        const currentYear = new Date().getFullYear();
+        
+        // Check if it's a year-only query
+        if (/^\d{4}$/.test(dateStr)) {
+          const queryYear = parseInt(dateStr, 10);
+          
+          // If query is for a year that's more than 1 year old, inform user of data limitations
+          if (queryYear < currentYear - 1) {
+            const location = intent.location.market || intent.location.district || intent.location.state || 'the requested location';
+            const commodity = intent.commodity || 'market prices';
+            
+            const historicalMessage = queryLanguage === 'hi'
+              ? `क्षमा करें, हमारे पास ${queryYear} का ऐतिहासिक डेटा उपलब्ध नहीं है।\n\nहमारा सिस्टम केवल पिछले 30 दिनों का डेटा प्रदान करता है। कृपया हाल की तारीखों के लिए कीमतें पूछें।\n\nउदाहरण: "${location} में ${commodity} की आज की कीमत क्या है?"`
+              : `Sorry, we don't have historical data for ${queryYear}.\n\nOur system provides market prices for the last 30 days only. Please ask for recent prices.\n\nExample: "What is the current price of ${commodity} in ${location}?"`;
+            
+            const botMessage = {
+              id: Date.now() + 2,
+              type: 'bot',
+              text: historicalMessage,
+              timestamp: new Date(),
+              language: queryLanguage
+            };
+            
+            setMessages(prev => [...prev, botMessage]);
+            setIsLoading(false);
+            
+            if (voiceEnabled && isVoice) {
+              voiceService.speak(historicalMessage, queryLanguage);
+            }
+            
+            return; // Exit early
+          }
+        }
+      }
+
       // Get district variations (handles reorganized districts)
       let districtVariations = null;
       if (intent.location.district && intent.location.state) {
@@ -399,6 +437,7 @@ function App() {
       // Fetch market prices based on intent
       const queryParams = {
         commodity: intent.commodity, // Can be null for market-wide queries
+        commodityAliases: intent.commodityAliases, // Include aliases for better search
         state: intent.location.state,
         district: intent.location.district,
         market: intent.location.market,
@@ -635,7 +674,8 @@ function App() {
         }
         
         // Location matches! Show the data
-        const displayData = formattedData.filter(item => {
+        // For fuzzy matches, skip filtering since fuzzy search already validated the match
+        const displayData = isFuzzyMatch ? formattedData : formattedData.filter(item => {
           const matchesDistrict = !requestedDistrict || item.district.toLowerCase().includes(requestedDistrict);
           const matchesMarket = !requestedMarket || item.market.toLowerCase().includes(requestedMarket);
           return matchesDistrict && matchesMarket;
@@ -685,9 +725,12 @@ function App() {
           // Found historical data in DB
           const formattedData = marketPriceAPI.formatPriceData(lastAvailablePrice.data);
           
+          // For market-wide queries, show location name; for commodity queries, show commodity name
+          const querySubject = intent.commodity || (intent.location.market || intent.location.district || 'the location');
+          
           const historicalMessage = queryLanguage === 'hi'
-            ? `आज के लिए ${intent.commodity} का डेटा उपलब्ध नहीं है।\n\nअंतिम उपलब्ध कीमत (${lastAvailablePrice.cacheDate}):`
-            : `Today's data not available for ${intent.commodity}.\n\nShowing last available price (${lastAvailablePrice.cacheDate}):`;
+            ? `आज के लिए ${querySubject} का डेटा उपलब्ध नहीं है।\n\nअंतिम उपलब्ध कीमत (${lastAvailablePrice.date || 'पिछली तारीख'}):`
+            : `Today's data not available for ${querySubject}.\n\nShowing last available price (${lastAvailablePrice.date || 'recent date'}):`;
           
           const responseText = await geminiService.generateResponse(
             formattedData,
@@ -695,14 +738,24 @@ function App() {
             queryLanguage
           );
           
+          // For market-wide queries, show image view; for specific commodity, show cards
+          const maxResults = !intent.commodity ? 20 : 10;
+          
           const botMessage = {
             id: Date.now() + 2,
             type: 'bot',
             text: historicalMessage + '\n\n' + responseText,
             timestamp: new Date(),
             language: queryLanguage,
-            priceData: formattedData.slice(0, 10),
-            isHistoricalData: true
+            priceData: !intent.commodity ? formattedData.slice(0, maxResults) : formattedData.slice(0, 10),
+            fullPriceData: !intent.commodity ? formattedData : null, // Full data for image generation in market-wide view
+            isMarketOverview: !intent.commodity, // Flag for market-wide queries to use image view
+            isHistoricalData: true,
+            marketInfo: !intent.commodity ? {
+              market: intent.location.market,
+              district: intent.location.district,
+              state: intent.location.state
+            } : null
           };
           
           setMessages(prev => [...prev, botMessage]);
@@ -730,9 +783,12 @@ function App() {
             }, apiHistoricalData.data);
             console.log('✓ Cached historical API data in Supabase');
             
+            // For market-wide queries, show location name; for commodity queries, show commodity name
+            const querySubject = intent.commodity || (intent.location.market || intent.location.district || 'the location');
+            
             const historicalMessage = queryLanguage === 'hi'
-              ? `आज के लिए ${intent.commodity} का डेटा उपलब्ध नहीं है।\n\nअंतिम उपलब्ध कीमत (${apiHistoricalData.date}):`
-              : `Today's data not available for ${intent.commodity}.\n\nShowing last available price (${apiHistoricalData.date}):`;
+              ? `आज के लिए ${querySubject} का डेटा उपलब्ध नहीं है।\n\nअंतिम उपलब्ध कीमत (${apiHistoricalData.date}):`
+              : `Today's data not available for ${querySubject}.\n\nShowing last available price (${apiHistoricalData.date}):`;
             
             const responseText = await geminiService.generateResponse(
               historicalData,
@@ -740,14 +796,24 @@ function App() {
               queryLanguage
             );
             
+            // For market-wide queries, show image view; for specific commodity, show cards
+            const maxResults = !intent.commodity ? 20 : 10;
+            
             const botMessage = {
               id: Date.now() + 2,
               type: 'bot',
               text: historicalMessage + '\n\n' + responseText,
               timestamp: new Date(),
               language: queryLanguage,
-              priceData: historicalData.slice(0, 10),
-              isHistoricalData: true
+              priceData: !intent.commodity ? historicalData.slice(0, maxResults) : historicalData.slice(0, 10),
+              fullPriceData: !intent.commodity ? historicalData : null, // Full data for image generation in market-wide view
+              isMarketOverview: !intent.commodity, // Flag for market-wide queries to use image view
+              isHistoricalData: true,
+              marketInfo: !intent.commodity ? {
+                market: intent.location.market,
+                district: intent.location.district,
+                state: intent.location.state
+              } : null
             };
             
             setMessages(prev => [...prev, botMessage]);

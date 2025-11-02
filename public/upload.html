@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Upload Market Data - AgriGuru</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { font-family: 'Inter', sans-serif; }
+    body { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .glass { background: rgba(255, 255, 255, 0.95); backdrop-filter: blur(10px); }
+    .card-shadow { box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15); }
+    .gradient-btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .gradient-btn:hover { transform: translateY(-2px); box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4); }
+    .upload-area { border: 3px dashed #667eea; transition: all 0.3s; }
+    .upload-area:hover { border-color: #764ba2; background: rgba(102, 126, 234, 0.05); }
+    .upload-area.dragover { border-color: #764ba2; background: rgba(102, 126, 234, 0.1); transform: scale(1.02); }
+    @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
+    .float-animation { animation: float 3s ease-in-out infinite; }
+    .shine { position: relative; overflow: hidden; }
+    .shine::after { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
+      background: linear-gradient(45deg, transparent, rgba(255,255,255,0.3), transparent);
+      transform: rotate(45deg); animation: shine 3s infinite; }
+    @keyframes shine { 0% { transform: translateX(-100%) translateY(-100%) rotate(45deg); }
+      100% { transform: translateX(100%) translateY(100%) rotate(45deg); } }
+  </style>
+</head>
+<body class="min-h-screen py-6">
+  <!-- Floating Header -->
+  <div class="glass card-shadow max-w-6xl mx-auto px-6 py-4 mb-6 rounded-2xl">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center space-x-4">
+        <div class="w-14 h-14 gradient-btn rounded-xl flex items-center justify-center text-3xl float-animation shine">
+          🌾
+        </div>
+        <div>
+          <h1 class="text-3xl font-bold bg-gradient-to-r from-purple-600 to-blue-500 bg-clip-text text-transparent">
+            AgriGuru Data Upload
+          </h1>
+          <p class="text-gray-600 text-sm">Powered by Gemini AI | Supports Indian Languages</p>
+        </div>
+      </div>
+      <a href="/" class="px-5 py-2.5 bg-white border-2 border-purple-600 text-purple-600 rounded-xl font-semibold hover:bg-purple-600 hover:text-white transition-all">
+        ← Back to App
+      </a>
+    </div>
+  </div>
+
+  <!-- Info Banner -->
+  <div class="glass card-shadow max-w-6xl mx-auto px-6 py-4 mb-6 rounded-2xl border-l-4 border-blue-500">
+    <div class="flex items-start space-x-3">
+      <div class="text-2xl">ℹ️</div>
+      <div class="flex-1">
+        <h3 class="font-semibold text-gray-800 mb-1">AI-Powered Data Extraction</h3>
+        <p class="text-gray-600 text-sm">
+          Upload market price data manually or via image. Our Gemini AI understands <strong>Hindi, Telugu, Tamil, Kannada, Malayalam</strong> and other Indian languages. 
+          Manual entries will overwrite existing data.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="max-w-6xl mx-auto px-6">
+    <!-- Tab Selection -->
+    <div class="glass card-shadow rounded-2xl p-2 mb-6 flex gap-2">
+      <button id="manualTab" class="flex-1 py-4 px-6 gradient-btn text-white rounded-xl font-semibold transition-all flex items-center justify-center space-x-2 shine">
+        <span class="text-xl">⌨️</span>
+        <span>Manual Entry</span>
+      </button>
+      <button id="imageTab" class="flex-1 py-4 px-6 bg-white text-gray-600 rounded-xl font-semibold transition-all hover:bg-gray-50 flex items-center justify-center space-x-2">
+        <span class="text-xl">📸</span>
+        <span>AI Image Upload</span>
+      </button>
+    </div>
+
+    <!-- Manual Entry Form -->
+    <div id="manualForm" class="glass card-shadow rounded-2xl p-8">
+      <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center space-x-2">
+        <span class="text-3xl">✏️</span>
+        <span>Manual Data Entry</span>
+      </h2>
+      
+      <form id="dataEntryForm" class="space-y-6">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Commodity *</label>
+            <input type="text" name="commodity" required
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all"
+              placeholder="e.g., Wheat, Rice, Tomato">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Variety</label>
+            <input type="text" name="variety"
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all"
+              placeholder="e.g., PBW-343, IR-64">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">State *</label>
+            <input type="text" name="state" required
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all"
+              placeholder="e.g., Punjab, Maharashtra">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">District *</label>
+            <input type="text" name="district" required
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all"
+              placeholder="e.g., Ludhiana">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Market *</label>
+            <input type="text" name="market" required
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all"
+              placeholder="e.g., Khanna Mandi">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Arrival Date *</label>
+            <input type="date" name="arrival_date" required
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Minimum Price (₹/Quintal) *</label>
+            <input type="number" name="min_price" step="0.01" required
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all"
+              placeholder="e.g., 1800">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Maximum Price (₹/Quintal) *</label>
+            <input type="number" name="max_price" step="0.01" required
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all"
+              placeholder="e.g., 2200">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Modal Price (₹/Quintal) *</label>
+            <input type="number" name="modal_price" step="0.01" required
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all"
+              placeholder="e.g., 2000">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Arrival Quantity (Quintal)</label>
+            <input type="number" name="arrival_quantity" step="0.01"
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all"
+              placeholder="e.g., 500">
+          </div>
+          
+          <div>
+            <label class="block text-sm font-semibold text-gray-700 mb-2">Grade</label>
+            <input type="text" name="grade"
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:ring-4 focus:ring-purple-200 focus:border-purple-500 transition-all"
+              placeholder="e.g., FAQ, A, B">
+          </div>
+        </div>
+        
+        <div class="flex items-center space-x-4 pt-4">
+          <button type="submit" class="flex-1 gradient-btn text-white py-4 px-6 rounded-xl font-semibold transition-all hover:shadow-lg flex items-center justify-center space-x-2 shine">
+            <span class="text-xl">🚀</span>
+            <span>Upload Data</span>
+          </button>
+          <button type="reset" class="px-6 py-4 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all">
+            🔄 Reset
+          </button>
+        </div>
+      </form>
+      
+      <div id="manualStatus" class="mt-6 hidden"></div>
+    </div>
+
+    <!-- Image Upload Form -->
+    <div id="imageForm" class="glass card-shadow rounded-2xl p-8 hidden">
+      <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center space-x-2">
+        <span class="text-3xl">🤖</span>
+        <span>AI-Powered Image Upload</span>
+      </h2>
+      
+      <div class="space-y-6">
+        <!-- Upload Area -->
+        <div class="upload-area rounded-2xl p-12 text-center cursor-pointer" id="uploadArea">
+          <input type="file" id="imageInput" accept="image/*" class="hidden">
+          <div class="text-7xl mb-4 float-animation">☁️</div>
+          <p class="text-xl font-semibold text-gray-700 mb-2">Click or drag to upload</p>
+          <p class="text-gray-500">Supports JPG, PNG • Max 10MB</p>
+          <p class="text-sm text-purple-600 font-medium mt-3">✨ AI understands Hindi, Telugu, Tamil, Kannada & more!</p>
+        </div>
+        
+        <!-- Preview and Processing -->
+        <div id="imagePreview" class="hidden space-y-6">
+          <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div class="glass rounded-2xl p-4">
+              <h3 class="font-semibold text-gray-700 mb-3 flex items-center space-x-2">
+                <span class="text-xl">🖼️</span>
+                <span>Uploaded Image</span>
+              </h3>
+              <img id="previewImg" class="w-full rounded-xl shadow-lg border-4 border-white">
+            </div>
+            <div class="glass rounded-2xl p-4">
+              <h3 class="font-semibold text-gray-700 mb-3 flex items-center space-x-2">
+                <span class="text-xl">🧠</span>
+                <span>AI Extracted Data</span>
+              </h3>
+              <div id="extractedData" class="bg-gradient-to-br from-purple-50 to-blue-50 p-4 rounded-xl h-64 overflow-y-auto">
+                <div class="flex flex-col items-center justify-center h-full text-gray-400">
+                  <div class="text-4xl mb-3 animate-pulse">🔮</div>
+                  <span class="font-medium">Processing with AI...</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex space-x-4">
+            <button id="processAI" class="flex-1 gradient-btn text-white py-4 px-6 rounded-xl font-semibold transition-all hover:shadow-lg flex items-center justify-center space-x-2 shine">
+              <span class="text-xl">✅</span>
+              <span>Upload Extracted Data</span>
+            </button>
+            <button id="cancelAI" class="px-6 py-4 bg-gray-100 text-gray-700 rounded-xl font-semibold hover:bg-gray-200 transition-all">
+              ❌ Cancel
+            </button>
+          </div>
+        </div>
+        
+        <div id="aiStatus" class="hidden"></div>
+      </div>
+    </div>
+
+    <!-- Recent Uploads -->
+    <div class="glass card-shadow rounded-2xl p-8 mt-6">
+      <h2 class="text-2xl font-bold text-gray-800 mb-6 flex items-center space-x-2">
+        <span class="text-3xl">📜</span>
+        <span>Recent Uploads</span>
+      </h2>
+      <div id="recentUploads" class="space-y-3">
+        <p class="text-gray-500 text-center py-12">No recent uploads</p>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/upload-modern.js"></script>
+</body>
+</html>
