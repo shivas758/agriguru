@@ -333,6 +333,20 @@ function App() {
             state: intent.location.state
           };
           
+          // Extract date range from commodities
+          let dateRange = { period: 'Last 30 days' };
+          if (trendResult.commodities.length > 0) {
+            const firstCommodity = trendResult.commodities[0];
+            if (firstCommodity.oldestDate && firstCommodity.newestDate) {
+              const formatDate = (dateStr) => {
+                const date = new Date(dateStr);
+                return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+              };
+              dateRange.start = formatDate(firstCommodity.oldestDate);
+              dateRange.end = formatDate(firstCommodity.newestDate);
+            }
+          }
+          
           const summaryText = queryLanguage === 'hi'
             ? `${marketInfo.market || marketInfo.district} बाजार के ${trendResult.commodities.length} वस्तुओं के लिए कीमत ट्रेंड (पिछले 30 दिन):`
             : `Price trends for ${trendResult.commodities.length} commodities in ${marketInfo.market || marketInfo.district} market (last 30 days):`;
@@ -344,7 +358,10 @@ function App() {
             timestamp: new Date(),
             language: queryLanguage,
             marketInfo: marketInfo,
-            trendsData: { commodities: trendResult.commodities } // Data for MarketTrendCard component
+            trendsData: { 
+              commodities: trendResult.commodities,
+              dateRange: dateRange
+            } // Data for MarketTrendCard component
           };
           
           setMessages(prev => [...prev, botMessage]);

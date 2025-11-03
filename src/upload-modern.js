@@ -10,12 +10,12 @@ const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 
 // Models to try in order of preference (updated for Gemini 2.0+)
 const MODELS_TO_TRY = [
-  'gemini-2.5-flash',              // ✅ Latest, fastest with vision (CONFIRMED WORKING)
-  'gemini-2.0-flash',              // ✅ Stable 2.0 with vision (CONFIRMED WORKING)
+  //'gemini-2.5-flash',              // ✅ Latest, fastest with vision (CONFIRMED WORKING)
+  //'gemini-2.0-flash',              // ✅ Stable 2.0 with vision (CONFIRMED WORKING)
   'gemini-2.5-pro',                // Pro version with better accuracy
-  'gemini-2.0-flash-exp',          // Experimental 2.0
-  'gemini-2.5-pro-preview-03-25',  // Preview with vision support
-  'gemini-flash-latest',           // Generic latest flash
+  //'gemini-2.0-flash-exp',          // Experimental 2.0
+  //'gemini-2.5-pro-preview-03-25',  // Preview with vision support
+  
 ];
 
 // Get vision model instance
@@ -196,7 +196,10 @@ Extract ALL market price records from this image and return them as a JSON array
 IMPORTANT INSTRUCTIONS:
 1. If the image contains text in an Indian language, translate commodity names to English
 2. Extract ALL visible records, not just one
-3. If a field is not visible in the image, set it to null
+3. **USE YOUR INTELLIGENCE**: If state or district is not explicitly mentioned but you can infer it from the market name, fill it in!
+   - Example: "Azadpur Mandi" → state: "Delhi", district: "North Delhi"
+   - Example: "Vashi Market" → state: "Maharashtra", district: "Thane"
+   - Example: "Koyambedu" → state: "Tamil Nadu", district: "Chennai"
 4. For dates, use YYYY-MM-DD format
 5. Prices should be numbers without ₹ symbol or commas
 6. If you see a table, extract all rows
@@ -207,6 +210,11 @@ IMPORTANT INSTRUCTIONS:
    - टमाटर/ಟೊಮೇಟೊ/టమాటా = Tomato
    - आलू/ಆಲೂಗಡ್ಡೆ/బంగాళదుంప = Potato
    - मक्का/ಮೆಕ್ಕೆಜೋಳ/మొక్కజొన్న = Maize
+
+**LOCATION INTELLIGENCE**: Use your knowledge of Indian markets to fill state/district:
+- Major markets: Azadpur (Delhi), Vashi (Maharashtra), Koyambedu (Tamil Nadu), Yeshwanthpur (Karnataka)
+- If you recognize a famous market, automatically fill in its state and district
+- Only set to null if you truly cannot determine the location
 
 Return ONLY a valid JSON array, nothing else. If you cannot extract any data, return an empty array [].
 
@@ -264,6 +272,9 @@ Example output:
     const jsonMatch = text.match(/\[[\s\S]*\]/);
     if (jsonMatch) {
       extractedRecords = JSON.parse(jsonMatch[0]);
+      
+      // Post-process: Use AI to fill missing state/district if market is known
+      extractedRecords = await inferMissingLocations(extractedRecords);
       
       if (extractedRecords.length === 0) {
         extractedData.innerHTML = `
@@ -325,6 +336,71 @@ window.removeRecord = (index) => {
     handleImageUpload = null; // Trigger re-render with current records
   }
 };
+
+async function inferMissingLocations(records) {
+  // Check if any records have missing state/district but have market name
+  const recordsNeedingInference = records.filter(r => 
+    r.market && (!r.state || !r.district)
+  );
+  
+  if (recordsNeedingInference.length === 0) {
+    return records; // No inference needed
+  }
+  
+  try {
+    console.log(`🧠 Using AI to infer missing locations for ${recordsNeedingInference.length} records...`);
+    
+    const inferencePrompt = `
+You are an expert on Indian agricultural markets. Given these market names, provide the state and district for each.
+
+Markets:
+${recordsNeedingInference.map((r, i) => `${i + 1}. ${r.market}`).join('\n')}
+
+Return ONLY a JSON array with state and district for each market in the same order:
+[
+  {"state": "State Name", "district": "District Name"},
+  ...
+]
+
+Use your knowledge of Indian markets. Common examples:
+- Azadpur → Delhi, North Delhi
+- Vashi → Maharashtra, Thane
+- Koyambedu → Tamil Nadu, Chennai
+- Yeshwanthpur → Karnataka, Bangalore Urban
+- Lasalgaon → Maharashtra, Nashik
+- Pune → Maharashtra, Pune
+
+If you cannot determine with confidence, use the market name as district and make a best guess for state based on the name.
+Return ONLY the JSON array, nothing else.`;
+    
+    const model = getVisionModelInstance(MODELS_TO_TRY[0]);
+    const result = await model.generateContent(inferencePrompt);
+    const response = await result.response;
+    const text = response.text();
+    
+    const jsonMatch = text.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const locations = JSON.parse(jsonMatch[0]);
+      
+      // Apply inferred locations
+      let inferenceIndex = 0;
+      for (let i = 0; i < records.length; i++) {
+        if (records[i].market && (!records[i].state || !records[i].district)) {
+          if (locations[inferenceIndex]) {
+            records[i].state = records[i].state || locations[inferenceIndex].state;
+            records[i].district = records[i].district || locations[inferenceIndex].district;
+            console.log(`✅ Inferred: ${records[i].market} → ${records[i].state}, ${records[i].district}`);
+          }
+          inferenceIndex++;
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️ Could not infer locations, proceeding with original data:', error.message);
+  }
+  
+  return records;
+}
 
 async function fileToBase64(file) {
   return new Promise((resolve, reject) => {

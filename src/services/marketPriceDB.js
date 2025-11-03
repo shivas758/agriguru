@@ -351,7 +351,7 @@ class MarketPriceDB {
         .from('market_prices')
         .select('arrival_date, modal_price, min_price, max_price, commodity, market, district')
         .gte('arrival_date', startDateStr)
-        .lt('arrival_date', endDateStr)
+        .lte('arrival_date', endDateStr)
         .order('arrival_date', { ascending: true });
       
       if (commodity) {
@@ -367,26 +367,53 @@ class MarketPriceDB {
       // If market name is provided, use fuzzy matching with similarity
       if (market) {
         // Try exact match first (case-insensitive)
-        const exactQuery = supabase
-          .from('market_prices')
-          .select('arrival_date, modal_price, min_price, max_price, commodity, market')
-          .gte('arrival_date', startDateStr)
-          .lt('arrival_date', endDateStr)
-          .ilike('market', market)
-          .order('arrival_date', { ascending: true })
-          .limit(1000);
+        // Fetch with pagination to bypass Supabase's 1000 row server limit
+        let exactData = [];
+        let hasMore = true;
+        let offset = 0;
+        const pageSize = 1000;
         
-        if (commodity) {
-          // Use crop aliases to search for all variations
-          const aliases = getCropAliases(commodity);
-          if (aliases.length > 1) {
-            exactQuery.or(aliases.map(alias => `commodity.ilike.%${alias}%`).join(','));
+        while (hasMore) {
+          let exactQuery = supabase
+            .from('market_prices')
+            .select('arrival_date, modal_price, min_price, max_price, commodity, market')
+            .gte('arrival_date', startDateStr)
+            .lte('arrival_date', endDateStr)
+            .ilike('market', market)
+            .order('arrival_date', { ascending: true })
+            .range(offset, offset + pageSize - 1);
+          
+          if (commodity) {
+            // Use crop aliases to search for all variations
+            const aliases = getCropAliases(commodity);
+            if (aliases.length > 1) {
+              exactQuery = exactQuery.or(aliases.map(alias => `commodity.ilike.%${alias}%`).join(','));
+            } else {
+              exactQuery = exactQuery.ilike('commodity', `%${commodity}%`);
+            }
+          }
+          
+          const { data: pageData, error: exactError } = await exactQuery;
+          
+          if (exactError) {
+            console.error('Error fetching page:', exactError);
+            break;
+          }
+          
+          if (pageData && pageData.length > 0) {
+            exactData = exactData.concat(pageData);
+            offset += pageSize;
+            
+            // If we got less than pageSize, we've reached the end
+            if (pageData.length < pageSize) {
+              hasMore = false;
+            }
           } else {
-            exactQuery.ilike('commodity', `%${commodity}%`);
+            hasMore = false;
           }
         }
         
-        const { data: exactData, error: exactError } = await exactQuery;
+        const exactError = null;
         
         // If exact match found, use it
         if (!exactError && exactData && exactData.length > 0) {

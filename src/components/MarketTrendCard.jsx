@@ -1,17 +1,31 @@
-import React from 'react';
-import { TrendingUp, TrendingDown, Minus } from 'lucide-react';
+import React, { useState } from 'react';
+import { TrendingUp, TrendingDown, Minus, Download, Loader2 } from 'lucide-react';
 import commodityImageService from '../services/commodityImageService';
+import marketTrendImageService from '../services/marketTrendImageService';
 
 /**
  * Market-Wide Trend Card Component
  * Compact single-card view showing all commodities with old price, new price, and change
  */
 function MarketTrendCard({ trendsData, marketInfo }) {
+  const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+
   if (!trendsData || !trendsData.commodities || trendsData.commodities.length === 0) {
     return null;
   }
 
   const commodities = trendsData.commodities;
+
+  const handleDownload = async () => {
+    setIsGeneratingImage(true);
+    try {
+      await marketTrendImageService.generateAndDownload(trendsData, marketInfo);
+    } catch (error) {
+      console.error('Error generating trend images:', error);
+    } finally {
+      setIsGeneratingImage(false);
+    }
+  };
 
   // Statistics
   const stats = {
@@ -25,13 +39,35 @@ function MarketTrendCard({ trendsData, marketInfo }) {
     <div className="bg-white rounded-xl shadow-lg border border-gray-200 overflow-hidden">
       {/* Header */}
       <div className="bg-gradient-to-r from-blue-600 to-blue-700 text-white p-4">
-        <h2 className="text-lg font-bold">
-          {marketInfo.market || marketInfo.district || 'Market'} - Price Trends
-        </h2>
-        <p className="text-xs text-blue-100 mt-1">Last 30 days • {stats.total} commodities</p>
+        <div className="flex items-start justify-between mb-2">
+          <div>
+            <h2 className="text-lg font-bold">
+              {marketInfo.market || marketInfo.district || 'Market'} - Price Trends
+            </h2>
+            <p className="text-xs text-blue-100 mt-1">Last 30 days • {stats.total} commodities</p>
+          </div>
+          <button
+            onClick={handleDownload}
+            disabled={isGeneratingImage}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium backdrop-blur"
+            title="Download as image"
+          >
+            {isGeneratingImage ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span className="hidden sm:inline">Generating...</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4" />
+                <span className="hidden sm:inline">Download</span>
+              </>
+            )}
+          </button>
+        </div>
         
         {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-2 mt-3">
+        <div className="grid grid-cols-3 gap-2 mt-1">
           <div className="bg-green-500/20 backdrop-blur rounded-lg p-2 text-center border border-green-400/30">
             <div className="text-xl font-bold text-green-100">{stats.rising}</div>
             <div className="text-xs text-green-100">Rising</div>
@@ -79,6 +115,20 @@ function CommodityRow({ trend, index }) {
   const oldPrice = trendData.oldPrice || trend.oldPrice;
   const priceChange = trendData.priceChange || trend.priceChange;
   const percentChange = trendData.percentChange || trend.percentChange;
+  const oldestDate = trendData.oldestDate || trend.oldestDate;
+  const newestDate = trendData.newestDate || trend.newestDate;
+
+  // Format date for compact display
+  const formatDateCompact = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    if (!isNaN(date.getTime())) {
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${date.getDate()} ${monthNames[date.getMonth()]}`;
+    }
+    return dateStr;
+  };
 
   // Determine color based on trend direction
   const getRowStyle = () => {
@@ -130,12 +180,22 @@ function CommodityRow({ trend, index }) {
 
       {/* Old Price */}
       <td className="p-2 text-right">
-        <p className="text-sm font-medium text-gray-600">₹{oldPrice}</p>
+        <div>
+          <p className="text-sm font-medium text-gray-600">₹{oldPrice}</p>
+          {oldestDate && (
+            <p className="text-xs text-gray-400 mt-0.5">{formatDateCompact(oldestDate)}</p>
+          )}
+        </div>
       </td>
 
       {/* New Price */}
       <td className="p-2 text-right">
-        <p className="text-sm font-bold text-blue-700">₹{currentPrice}</p>
+        <div>
+          <p className="text-sm font-bold text-blue-700">₹{currentPrice}</p>
+          {newestDate && (
+            <p className="text-xs text-gray-400 mt-0.5">{formatDateCompact(newestDate)}</p>
+          )}
+        </div>
       </td>
 
       {/* Price Change */}

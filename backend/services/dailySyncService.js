@@ -1,5 +1,5 @@
 import apiClient from './apiClient.js';
-import supabase, { insertMarketPrices, startSyncJob, updateSyncStatus, hasDataForDate } from './supabaseClient.js';
+import supabase, { insertMarketPrices, startSyncJob, updateSyncStatus, hasDataForDate, deleteMarketPricesForDate } from './supabaseClient.js';
 import { config } from '../config/config.js';
 import { logger, logSyncStart, logSyncComplete, logSyncError } from '../utils/logger.js';
 
@@ -29,15 +29,11 @@ class DailySyncService {
       logSyncStart(syncDate, 'daily');
       await startSyncJob(syncDate, 'daily');
 
-      // Check if data already exists
+      // Check if data already exists and delete it to ensure complete overwrite
       const dataExists = await hasDataForDate(syncDate);
       if (dataExists) {
-        logger.info(`Data already exists for ${syncDate}. Skipping sync.`);
-        await updateSyncStatus(syncDate, 'completed', {
-          recordsSynced: 0,
-          errorMessage: 'Data already exists'
-        });
-        return { success: true, recordsSynced: 0, skipped: true };
+        logger.info(`Data already exists for ${syncDate}. Deleting existing data to ensure complete sync.`);
+        await deleteMarketPricesForDate(syncDate);
       }
 
       // Fetch data from API

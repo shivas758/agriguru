@@ -170,6 +170,27 @@ export async function hasDataForDate(date) {
 }
 
 /**
+ * Delete market prices for a specific date
+ * Used when re-syncing to ensure complete data overwrite
+ */
+export async function deleteMarketPricesForDate(date) {
+  try {
+    const { error, count } = await supabase
+      .from('market_prices')
+      .delete()
+      .eq('arrival_date', date);
+    
+    if (error) throw error;
+    
+    logger.info(`Deleted existing data for ${date} (${count || 0} records)`);
+    return { success: true, deletedCount: count || 0 };
+  } catch (error) {
+    logger.error('Error deleting market prices', { error, date });
+    throw error;
+  }
+}
+
+/**
  * Get data statistics
  */
 export async function getDataStats() {

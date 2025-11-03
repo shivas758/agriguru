@@ -76,6 +76,9 @@ function PriceTrendCard({ trend }) {
           <p className="text-sm text-gray-600 mb-1">Current Modal Price</p>
           <p className="text-4xl font-bold text-blue-600">₹{trend.currentPrice}</p>
           <p className="text-xs text-gray-500 mt-1">per Quintal</p>
+          {trend.newestDate && (
+            <p className="text-xs text-gray-400 mt-1">as of {formatDate(trend.newestDate)}</p>
+          )}
         </div>
 
         {/* Price Change Summary */}
@@ -96,6 +99,11 @@ function PriceTrendCard({ trend }) {
             <p className="text-sm text-gray-700">
               <span className="font-semibold">{trend.trendStrength}</span> over {trend.daysOfData} days
             </p>
+            {trend.oldPrice && trend.oldestDate && (
+              <p className="text-xs text-gray-500 mt-1">
+                Was ₹{trend.oldPrice} on {formatDate(trend.oldestDate)}
+              </p>
+            )}
           </div>
         </div>
 

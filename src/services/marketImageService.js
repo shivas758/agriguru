@@ -280,13 +280,22 @@ class MarketImageService {
     
     // Draw wrapped lines
     const lineHeight = 18;
-    const totalHeight = lines.length * lineHeight;
+    const dateSpace = 16; // Space for date
+    const totalHeight = (lines.length * lineHeight) + dateSpace;
     let textY = y + (rowHeight - totalHeight) / 2 + 13;
     
     lines.forEach(line => {
       ctx.fillText(line, currentX + nameColWidth / 2, textY);
       textY += lineHeight;
     });
+    
+    // Draw arrival date below commodity name
+    if (price.arrivalDate) {
+      ctx.fillStyle = '#6b7280';
+      ctx.font = '11px Arial, sans-serif';
+      const formattedDate = this.formatDateCompact(price.arrivalDate);
+      ctx.fillText(formattedDate, currentX + nameColWidth / 2, textY + 3);
+    }
     
     currentX += nameColWidth;
     
@@ -351,6 +360,28 @@ class MarketImageService {
           month: 'short',
           year: 'numeric'
         });
+      }
+    }
+    
+    return dateStr;
+  }
+
+  /**
+   * Format date in compact form for small displays (e.g., "5 Jan")
+   */
+  formatDateCompact(dateStr) {
+    if (!dateStr) return '';
+    
+    // Parse DD/MM/YYYY or DD-MM-YYYY format
+    const parts = dateStr.split(/[\/\-]/);
+    if (parts.length === 3) {
+      const [day, month, year] = parts;
+      const date = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+      
+      if (!isNaN(date.getTime())) {
+        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                           'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        return `${parseInt(day)} ${monthNames[date.getMonth()]}`;
       }
     }
     

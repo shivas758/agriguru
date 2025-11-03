@@ -255,7 +255,7 @@ class MarketTrendImageService {
     // Commodity name - compact with text wrapping
     ctx.strokeRect(currentX, y, nameColWidth, rowHeight);
     ctx.fillStyle = '#b91c1c';
-    ctx.font = 'bold 17px Arial, sans-serif';
+    ctx.font = 'bold 16px Arial, sans-serif';
     ctx.textAlign = 'center';
     
     // Wrap commodity name if too long
@@ -277,7 +277,7 @@ class MarketTrendImageService {
     }
     lines.push(currentLine);
     
-    const lineHeight = 16;
+    const lineHeight = 15;
     const totalHeight = lines.length * lineHeight;
     let textY = y + (rowHeight - totalHeight) / 2 + 12;
     
@@ -287,22 +287,40 @@ class MarketTrendImageService {
     });
     currentX += nameColWidth;
     
-    // Current price
+    // Current price with date
     ctx.strokeRect(currentX, y, newPriceColWidth, rowHeight);
     ctx.fillStyle = '#1e40af';
-    ctx.font = 'bold 20px Arial, sans-serif';
+    ctx.font = 'bold 19px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(trend.currentPrice, currentX + newPriceColWidth / 2, y + rowHeight / 2 + 6);
+    ctx.fillText(trend.currentPrice, currentX + newPriceColWidth / 2, y + rowHeight / 2 - 2);
+    
+    // Add date below current price
+    if (trend.newestDate) {
+      ctx.fillStyle = '#6b7280';
+      ctx.font = '9px Arial, sans-serif';
+      const formattedDate = this.formatDateCompact(trend.newestDate);
+      ctx.fillText(formattedDate, currentX + newPriceColWidth / 2, y + rowHeight / 2 + 14);
+    }
+    
     currentX += newPriceColWidth;
     
-    // Price change
+    // Price change with old date
     const changeColor = trend.priceChange >= 0 ? '#047857' : '#dc2626';
     const changePrefix = trend.priceChange >= 0 ? '+' : '';
     
     ctx.strokeRect(currentX, y, changeColWidth, rowHeight);
     ctx.fillStyle = changeColor;
-    ctx.font = 'bold 18px Arial, sans-serif';
-    ctx.fillText(`${changePrefix}${trend.priceChange}`, currentX + changeColWidth / 2, y + rowHeight / 2 + 6);
+    ctx.font = 'bold 17px Arial, sans-serif';
+    ctx.fillText(`${changePrefix}${trend.priceChange}`, currentX + changeColWidth / 2, y + rowHeight / 2 - 2);
+    
+    // Add "from date" below change
+    if (trend.oldestDate) {
+      ctx.fillStyle = '#6b7280';
+      ctx.font = '9px Arial, sans-serif';
+      const formattedDate = this.formatDateCompact(trend.oldestDate);
+      ctx.fillText(`from ${formattedDate}`, currentX + changeColWidth / 2, y + rowHeight / 2 + 14);
+    }
+    
     currentX += changeColWidth;
     
     // Percent change
@@ -382,6 +400,22 @@ class MarketTrendImageService {
       month: 'short',
       year: 'numeric'
     });
+  }
+
+  /**
+   * Format date in compact form for small displays (e.g., "5 Jan")
+   */
+  formatDateCompact(dateStr) {
+    if (!dateStr) return '';
+    
+    const date = new Date(dateStr);
+    if (!isNaN(date.getTime())) {
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return `${date.getDate()} ${monthNames[date.getMonth()]}`;
+    }
+    
+    return dateStr;
   }
 
   /**

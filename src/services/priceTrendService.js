@@ -522,6 +522,8 @@ class PriceTrendService {
                   percentChange: trend.percentChange,
                   direction: trend.direction,
                   daysAvailable: historicalData.length,
+                  oldestDate: trend.oldestDate, // Include for image generation
+                  newestDate: trend.newestDate, // Include for image generation
                   trend: trend // Keep nested for backward compatibility
                 });
               }
@@ -588,7 +590,8 @@ class PriceTrendService {
       return {
         success: true,
         type: 'market_wide',
-        trends: marketTrends,
+        commodities: marketTrends.commodities,
+        totalCommodities: marketTrends.totalCommodities,
         daysAvailable: historicalResult.daysOfData
       };
     } catch (error) {
