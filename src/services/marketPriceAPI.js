@@ -18,6 +18,70 @@ class MarketPriceAPI {
     };
   }
 
+  /**
+   * Calculate Levenshtein distance between two strings (fuzzy matching)
+   */
+  levenshteinDistance(str1, str2) {
+    const s1 = str1.toLowerCase();
+    const s2 = str2.toLowerCase();
+    const len1 = s1.length;
+    const len2 = s2.length;
+    const matrix = [];
+
+    // Initialize matrix
+    for (let i = 0; i <= len1; i++) {
+      matrix[i] = [i];
+    }
+    for (let j = 0; j <= len2; j++) {
+      matrix[0][j] = j;
+    }
+
+    // Fill matrix
+    for (let i = 1; i <= len1; i++) {
+      for (let j = 1; j <= len2; j++) {
+        if (s1.charAt(i - 1) === s2.charAt(j - 1)) {
+          matrix[i][j] = matrix[i - 1][j - 1];
+        } else {
+          matrix[i][j] = Math.min(
+            matrix[i - 1][j - 1] + 1, // substitution
+            matrix[i][j - 1] + 1,     // insertion
+            matrix[i - 1][j] + 1      // deletion
+          );
+        }
+      }
+    }
+
+    return matrix[len1][len2];
+  }
+
+  /**
+   * Calculate similarity score (0-1, higher is better)
+   */
+  similarityScore(str1, str2) {
+    const maxLen = Math.max(str1.length, str2.length);
+    if (maxLen === 0) return 1;
+    const distance = this.levenshteinDistance(str1, str2);
+    return 1 - (distance / maxLen);
+  }
+
+  /**
+   * Find best matching market name from a list
+   */
+  findBestMarketMatch(searchMarket, availableMarkets, threshold = 0.7) {
+    let bestMatch = null;
+    let bestScore = 0;
+
+    for (const market of availableMarkets) {
+      const score = this.similarityScore(searchMarket, market);
+      if (score > bestScore && score >= threshold) {
+        bestScore = score;
+        bestMatch = market;
+      }
+    }
+
+    return { market: bestMatch, score: bestScore };
+  }
+
   async fetchMarketPricesWithVariations(params = {}, districtVariations = null) {
     // If district variations provided, try each one
     if (districtVariations && districtVariations.length > 1) {
@@ -71,6 +135,9 @@ class MarketPriceAPI {
           message: `No data found for ${params.commodity} or its aliases`
         };
       }
+
+      // Store original market name for fuzzy matching
+      const originalMarket = params.market;
       
       // First try with all filters
       let queryParams = {
@@ -106,7 +173,62 @@ class MarketPriceAPI {
         }
       }
       
-      // If no results and we have district filter, try without district (search by state only)
+      // If no results and we have market filter, try fuzzy matching
+      if ((!response.data || !response.data.records || response.data.records.length === 0) && originalMarket && params.district) {
+        console.log(`🔍 No exact match for market "${originalMarket}", trying fuzzy search...`);
+        
+        // Fetch all markets in the district (without market filter)
+        const districtParams = { ...params };
+        delete districtParams.market;
+        
+        queryParams = {
+          'api-key': this.apiKey,
+          format: 'json',
+          limit: 500, // Get more records to find market variations
+          offset: params.offset || 0,
+          'sort[Arrival_Date]': 'desc',
+          ...this.buildFilters(districtParams)
+        };
+        
+        response = await axios.get(BASE_URL, { 
+          params: queryParams, 
+          ...this.axiosConfig 
+        });
+        
+        if (response.data && response.data.records && response.data.records.length > 0) {
+          // Extract unique market names from the district
+          const availableMarkets = [...new Set(
+            response.data.records
+              .map(r => r.Market || r.market)
+              .filter(m => m)
+          )];
+          
+          console.log(`Found ${availableMarkets.length} unique markets in district`);
+          
+          // Find best fuzzy match
+          const match = this.findBestMarketMatch(originalMarket, availableMarkets, 0.7);
+          
+          if (match.market) {
+            console.log(`✅ Fuzzy match found: "${originalMarket}" → "${match.market}" (similarity: ${(match.score * 100).toFixed(1)}%)`);
+            
+            // Filter records to this market
+            response.data.records = response.data.records.filter(record => 
+              (record.Market || record.market) === match.market
+            );
+            
+            console.log(`Filtered to ${response.data.records.length} records for fuzzy-matched market`);
+            
+            // Mark response as using fuzzy match
+            response.fuzzyMatchApplied = true;
+            response.fuzzyMatchedMarket = match.market;
+            response.originalMarket = originalMarket;
+          } else {
+            console.log(`⚠️ No fuzzy match found for "${originalMarket}" (threshold: 70%)`);
+          }
+        }
+      }
+      
+      // If still no results and we have district filter, try state-only search
       if ((!response.data || !response.data.records || response.data.records.length === 0) && params.district) {
         // DEBUG: Uncommented for debugging
         console.log('No results with district filter, trying with state only...');
@@ -156,7 +278,10 @@ class MarketPriceAPI {
           success: true,
           data: filteredRecords,
           total: filteredRecords.length,
-          message: 'Data fetched successfully'
+          message: 'Data fetched successfully',
+          fuzzyMatchApplied: response.fuzzyMatchApplied || false,
+          fuzzyMatchedMarket: response.fuzzyMatchedMarket,
+          originalMarket: response.originalMarket
         };
       }
 

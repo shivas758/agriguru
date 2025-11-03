@@ -93,7 +93,7 @@ class MarketPriceDB {
           data: dbResult.data,
           total: dbResult.data.length,
           fromCache: false,
-          source: 'database'
+          source: dbResult.source || 'database' // Preserve fuzzy match source
         };
       }
     }
@@ -223,7 +223,7 @@ class MarketPriceDB {
    * Helper: Query with fuzzy market name matching
    */
   async queryWithFuzzyMarket(params) {
-    const { commodity, market, date, limit = 100 } = params;
+    const { commodity, market, date, limit = 100, district, state } = params;
     
     try {
       // Try exact match first
@@ -277,7 +277,7 @@ class MarketPriceDB {
         nextDay.setDate(nextDay.getDate() + 1);
         endDate = nextDay.toISOString().split('T')[0];
       } else {
-        // For date range, last 30 days
+        // For no specific date: Use last 30 days to find latest available date
         const d = new Date();
         d.setDate(d.getDate() - 30);
         startDate = d.toISOString().split('T')[0];
@@ -293,10 +293,25 @@ class MarketPriceDB {
       });
       
       if (!fuzzyError && fuzzyData && fuzzyData.length > 0) {
-        console.log(`✅ Fuzzy match found for "${market}": ${fuzzyData.length} records`);
+        console.log(`✅ Fuzzy match found for "${market}": ${fuzzyData.length} records (raw)`);
+        
+        // If no specific date was provided AND no commodity (market-wide query),
+        // filter to show only the LATEST date's data
+        let filteredData = fuzzyData;
+        if (!date && !commodity) {
+          // Find the most recent date in the results
+          const latestDate = fuzzyData.reduce((latest, row) => {
+            return !latest || row.arrival_date > latest ? row.arrival_date : latest;
+          }, null);
+          
+          if (latestDate) {
+            filteredData = fuzzyData.filter(row => row.arrival_date === latestDate);
+            console.log(`📅 Filtered to latest date (${latestDate}): ${filteredData.length} records`);
+          }
+        }
         
         // Convert from RPC result to standard format
-        const formattedData = fuzzyData.map(row => ({
+        const formattedData = filteredData.map(row => ({
           State: row.state || '',
           District: row.district || '',
           Market: row.market,
@@ -306,14 +321,14 @@ class MarketPriceDB {
           Min_Price: parseFloat(row.min_price) || 0,
           Max_Price: parseFloat(row.max_price) || 0,
           Modal_Price: parseFloat(row.modal_price) || 0,
-          Arrival_Date: row.arrival_date,
+          Arrival_Date: this.formatDateForAPI(row.arrival_date), // Format from YYYY-MM-DD to DD-MM-YYYY
           Arrival_Quantity: parseFloat(row.arrival_quantity) || 0
         }));
         
         return {
           success: true,
           data: formattedData,
-          total: fuzzyData.length,
+          total: formattedData.length,
           fromCache: false,
           source: 'database_fuzzy'
         };

@@ -151,6 +151,13 @@ class MarketImageService {
     const headerRowHeight = 70;
     const rowHeight = 90;
     
+    // Detect duplicate commodity names
+    const commodityCount = {};
+    priceData.forEach(item => {
+      const commodity = item.commodity || 'N/A';
+      commodityCount[commodity] = (commodityCount[commodity] || 0) + 1;
+    });
+    
     // Draw table header
     let currentY = startY;
     
@@ -204,7 +211,7 @@ class MarketImageService {
     // Draw data rows
     for (let i = 0; i < priceData.length; i++) {
       await this.drawTableRow(ctx, priceData[i], tableX, currentY, 
-        imageColWidth, nameColWidth, minColWidth, modalColWidth, maxColWidth, rowHeight, i);
+        imageColWidth, nameColWidth, minColWidth, modalColWidth, maxColWidth, rowHeight, i, commodityCount);
       currentY += rowHeight;
     }
   }
@@ -212,7 +219,7 @@ class MarketImageService {
   /**
    * Draw a single table row
    */
-  async drawTableRow(ctx, price, x, y, imageColWidth, nameColWidth, minColWidth, modalColWidth, maxColWidth, rowHeight, index) {
+  async drawTableRow(ctx, price, x, y, imageColWidth, nameColWidth, minColWidth, modalColWidth, maxColWidth, rowHeight, index, commodityCount = {}) {
     // Alternating row colors - softer contrast
     ctx.fillStyle = index % 2 === 0 ? '#ffffff' : '#f9fafb';
     const totalWidth = imageColWidth + nameColWidth + minColWidth + modalColWidth + maxColWidth;
@@ -259,10 +266,20 @@ class MarketImageService {
     ctx.font = 'bold 18px Arial, sans-serif';
     ctx.textAlign = 'center';
     
-    // Wrap text if needed
+    // Determine if we should show variety (when there are duplicates)
     const commodityName = price.commodity || 'N/A';
+    const hasDuplicates = commodityCount[commodityName] > 1;
+    const variety = price.variety || 'N/A';
+    
+    // Build display name: show variety if there are duplicates
+    let displayName = commodityName;
+    if (hasDuplicates && variety && variety !== 'N/A') {
+      displayName = `${commodityName} (${variety})`;
+    }
+    
+    // Wrap text if needed
     const maxWidth = nameColWidth - 10; // padding
-    const words = commodityName.split(' ');
+    const words = displayName.split(' ');
     const lines = [];
     let currentLine = words[0];
     

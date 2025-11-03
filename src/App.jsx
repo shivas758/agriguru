@@ -556,7 +556,7 @@ function App() {
         
         // Skip location validation if data came from fuzzy search
         // (fuzzy search already validated the match)
-        const isFuzzyMatch = response.source === 'database_fuzzy';
+        const isFuzzyMatch = response.source === 'database_fuzzy' || response.fuzzyMatchApplied;
         
         const hasMatchingLocation = isFuzzyMatch || formattedData.some(item => {
           // Bidirectional fuzzy matching for market/district names

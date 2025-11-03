@@ -237,6 +237,22 @@ CRITICAL FOR MARKET PRICE QUERIES:
 - Return commodity name EXACTLY as user mentioned
 - Set commodity to null for market-wide queries
 
+IMPORTANT DISTRICT INFORMATION (Use OLD district names for API compatibility):
+Andhra Pradesh (use PRE-2022 district names for data.gov.in API):
+- Ravulapalem/Rajahmundry/Kakinada → "East Godavari" (NOT "Konaseema" or "Dr. B.R. Ambedkar Konaseema")
+- Amalapuram → "East Godavari" (NOT "Konaseema")
+- Eluru/Bhimavaram → "West Godavari" (NOT "Eluru" district)
+- Narasaraopet → "Guntur" (NOT "Palnadu")
+- Anakapalli → "Visakhapatnam" (NOT "Anakapalli" district)
+- Adoni → "Kurnool"
+
+Telangana (use PRE-2016 district names):
+- Mulugu → "Warangal"
+- Narayanpet → "Mahabubnagar"  
+- Vikarabad → "Ranga Reddy"
+
+CRITICAL: For market price queries, use OLD/PARENT district names as government API databases are not updated with new districts.
+
 CRITICAL FOR PRICE TREND QUERIES:
 - Look for keywords: "change", "trend", "increase", "decrease", "this week", "last week", "month", etc.
 - Extract timePeriod from query (week, month, or days)
@@ -424,21 +440,28 @@ You are an expert on Indian administrative geography and district reorganization
 District: ${district}
 State: ${state}
 
-IMPORTANT: Many Indian states have reorganized districts in recent years. Government databases like data.gov.in often use OLD district names from before reorganization.
+CRITICAL: Government databases like data.gov.in often use OLD district names from BEFORE reorganization.
+For API queries, we need the OLD district name FIRST (higher priority), then the new name.
 
 Your task:
 1. Check if this district was created recently (after 2014) through reorganization
-2. If YES, identify the PARENT/OLD district name that would be in older databases
-3. If NO, return the same district name
+2. If YES, return the OLD/PARENT district name FIRST (for API compatibility), then the new name
+3. If NO reorganization, return just the district name
 
-Examples:
-- "Mulugu, Telangana" → Was part of "Warangal" before 2016 → Return ["Mulugu", "Warangal"]
-- "Narayanpet, Telangana" → Was part of "Mahabubnagar" → Return ["Narayanpet", "Mahabubnagar"]
-- "Vikarabad, Telangana" → Was part of "Ranga Reddy" → Return ["Vikarabad", "Ranga Reddy"]
-- "Kurnool, Andhra Pradesh" → Old district, no change → Return ["Kurnool"]
+ANDHRA PRADESH SPECIFIC CASES (2022 reorganization):
+- "Dr. B.R. Ambedkar Konaseema" → Created from "East Godavari" in 2022 → Return ["East Godavari", "Dr. B.R. Ambedkar Konaseema"]
+- "Eluru" → Created from "West Godavari" in 2022 → Return ["West Godavari", "Eluru"]
+- "Palnadu" → Created from "Guntur" in 2022 → Return ["Guntur", "Palnadu"]
+- "Anakapalli" → Created from "Visakhapatnam" in 2022 → Return ["Visakhapatnam", "Anakapalli"]
+- "East Godavari" → Old district, still valid → Return ["East Godavari"]
 
-Return ONLY a JSON array of district names (new name first, then old parent district if applicable):
-["NewDistrictName", "OldParentDistrict"]
+TELANGANA CASES:
+- "Mulugu" → Was part of "Warangal" before 2016 → Return ["Warangal", "Mulugu"]
+- "Narayanpet" → Was part of "Mahabubnagar" → Return ["Mahabubnagar", "Narayanpet"]
+- "Vikarabad" → Was part of "Ranga Reddy" → Return ["Ranga Reddy", "Vikarabad"]
+
+Return ONLY a JSON array with OLD district FIRST (for API), then new district:
+["OldParentDistrict", "NewDistrictName"]
 
 If no reorganization, return single-element array:
 ["DistrictName"]
