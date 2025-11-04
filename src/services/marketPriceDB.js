@@ -54,8 +54,9 @@ class MarketPriceDB {
   }
 
   /**
-   * Get today's prices (from API with caching, DB check with fuzzy search)
-   * Smart routing: Before 12 PM - DB only, After 12 PM - DB then API
+   * Get today's prices with smart time-based routing
+   * Before 12 PM IST: DB only (show latest from last 60 days)
+   * After 12 PM IST: API first, then DB fallback
    */
   async getTodayPrices(params) {
     // Check current time
@@ -77,87 +78,92 @@ class MarketPriceDB {
       };
     }
 
-    // Check database first (with fuzzy matching for markets)
-    if (isSupabaseConfigured() && params.market) {
-      // console.log('🔍 Checking database for today\'s data with fuzzy search...');
-      const dbResult = await this.queryWithFuzzyMarket({
-        ...params,
-        date: this.getTodayDate()
-      });
+    // Time-based routing logic
+    if (isBefore12PM) {
+      // Before 12 PM IST: Search DB only (market prices not yet updated)
+      console.log('⏰ Before 12 PM IST - Searching database for latest prices (last 60 days)...');
       
-      if (dbResult.success && dbResult.data.length > 0) {
-        // console.log(`✅ Found ${dbResult.data.length} records in database (today's data)`);
-        
-        // Cache in memory
-        this.todayCache.set(cacheKey, {
-          data: dbResult.data,
-          timestamp: Date.now()
+      if (isSupabaseConfigured()) {
+        // Search DB for latest prices from last 60 days
+        const dbResult = await this.queryWithFuzzyMarket({
+          ...params,
+          date: null // Don't filter by specific date, get latest from 60 days
         });
         
-        return {
-          success: true,
-          data: dbResult.data,
-          total: dbResult.data.length,
-          fromCache: false,
-          source: dbResult.source || 'database' // Preserve fuzzy match source
-        };
-      }
-    }
-
-    // Time-based routing: Before 12 PM, don't call API (prices not yet updated)
-    if (isBefore12PM) {
-      // console.log('⏰ Before 12 PM - Market prices not yet updated. Checking for yesterday\'s data...');
-      
-      // Try to get yesterday's data from DB
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      const yesterdayDate = yesterday.toISOString().split('T')[0];
-      
-      const yesterdayResult = await this.queryWithFuzzyMarket({
-        ...params,
-        date: yesterdayDate
-      });
-      
-      if (yesterdayResult.success && yesterdayResult.data.length > 0) {
-        return {
-          success: true,
-          data: yesterdayResult.data,
-          total: yesterdayResult.data.length,
-          fromCache: false,
-          source: 'database',
-          isYesterdayData: true,
-          message: 'Showing yesterday\'s prices. Today\'s prices will be available after 12 PM.'
-        };
+        if (dbResult.success && dbResult.data.length > 0) {
+          console.log(`✅ Found ${dbResult.data.length} records in database`);
+          
+          // Cache in memory
+          this.todayCache.set(cacheKey, {
+            data: dbResult.data,
+            timestamp: Date.now()
+          });
+          
+          return {
+            success: true,
+            data: dbResult.data,
+            total: dbResult.data.length,
+            fromCache: false,
+            source: dbResult.source || 'database'
+          };
+        }
       }
       
-      // No data available
+      // No data in DB before 12 PM
       return {
         success: false,
         data: [],
-        message: 'Market prices are updated after 12 PM. Please check back later.',
+        message: 'No recent data available. Market prices are updated after 12 PM IST.',
+        source: 'none'
+      };
+    } else {
+      // After 12 PM IST: Search API first (fresh data available)
+      console.log('📡 After 12 PM IST - Fetching from API first...');
+      const response = await marketPriceAPI.fetchMarketPrices(params);
+      
+      if (response.success && response.data.length > 0) {
+        // Cache in memory
+        this.todayCache.set(cacheKey, {
+          data: response.data,
+          timestamp: Date.now()
+        });
+        
+        // Also cache in DB for future use
+        this.cacheInDB(response.data, this.getTodayDate());
+        
+        return {
+          ...response,
+          source: 'api'
+        };
+      }
+      
+      // API failed, fallback to DB
+      console.log('⚠️ API returned no data, falling back to database...');
+      if (isSupabaseConfigured()) {
+        const dbResult = await this.queryWithFuzzyMarket({
+          ...params,
+          date: null // Get latest from last 60 days
+        });
+        
+        if (dbResult.success && dbResult.data.length > 0) {
+          return {
+            success: true,
+            data: dbResult.data,
+            total: dbResult.data.length,
+            fromCache: false,
+            source: 'database',
+            message: 'Showing latest available data from database'
+          };
+        }
+      }
+      
+      return {
+        success: false,
+        data: [],
+        message: 'No data available',
         source: 'none'
       };
     }
-
-    // After 12 PM: Fetch from API as fallback
-    // console.log('Fetching today\'s data from API...');
-    const response = await marketPriceAPI.fetchMarketPrices(params);
-    
-    if (response.success && response.data.length > 0) {
-      // Cache in memory
-      this.todayCache.set(cacheKey, {
-        data: response.data,
-        timestamp: Date.now()
-      });
-      
-      // Also cache in DB for future use
-      this.cacheInDB(response.data, this.getTodayDate());
-    }
-    
-    return {
-      ...response,
-      source: 'api'
-    };
   }
 
   /**
@@ -197,10 +203,10 @@ class MarketPriceDB {
       if (date) {
         query = query.eq('arrival_date', date);
       } else {
-        // Get last 30 days by default
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        query = query.gte('arrival_date', thirtyDaysAgo.toISOString().split('T')[0]);
+        // Get last 60 days by default
+        const sixtyDaysAgo = new Date();
+        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+        query = query.gte('arrival_date', sixtyDaysAgo.toISOString().split('T')[0]);
       }
       
       if (commodity) {
@@ -237,13 +243,31 @@ class MarketPriceDB {
       if (data && data.length > 0) {
         console.log(`✓ Found ${data.length} records in database`);
         
+        // For market-wide queries without specific date, show latest price per commodity
+        let finalData = data;
+        if (!date && !commodity && market) {
+          const latestByCommodity = new Map();
+          
+          data.forEach(row => {
+            const key = `${row.commodity}-${row.variety || 'default'}`;
+            const existing = latestByCommodity.get(key);
+            
+            if (!existing || row.arrival_date > existing.arrival_date) {
+              latestByCommodity.set(key, row);
+            }
+          });
+          
+          finalData = Array.from(latestByCommodity.values());
+          console.log(`📊 Showing latest price for ${finalData.length} unique commodities from last 60 days`);
+        }
+        
         // Transform DB format to API format
-        const formattedData = this.transformDBToAPIFormat(data);
+        const formattedData = this.transformDBToAPIFormat(finalData);
         
         return {
           success: true,
           data: formattedData,
-          total: data.length,
+          total: formattedData.length,
           fromCache: false,
           source: 'database'
         };
@@ -276,9 +300,10 @@ class MarketPriceDB {
       if (date) {
         exactQuery = exactQuery.eq('arrival_date', date);
       } else {
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        exactQuery = exactQuery.gte('arrival_date', thirtyDaysAgo.toISOString().split('T')[0]);
+        // Search last 60 days for latest prices
+        const sixtyDaysAgo = new Date();
+        sixtyDaysAgo.setDate(sixtyDaysAgo.getDate() - 60);
+        exactQuery = exactQuery.gte('arrival_date', sixtyDaysAgo.toISOString().split('T')[0]);
       }
       
       if (commodity) {
@@ -297,10 +322,29 @@ class MarketPriceDB {
       
       if (!exactError && exactData && exactData.length > 0) {
         console.log(`✅ Exact match found for market "${market}": ${exactData.length} records`);
+        
+        // For market-wide queries, filter to latest price per commodity
+        let finalData = exactData;
+        if (!date && !commodity) {
+          const latestByCommodity = new Map();
+          
+          exactData.forEach(row => {
+            const key = `${row.commodity}-${row.variety || 'default'}`;
+            const existing = latestByCommodity.get(key);
+            
+            if (!existing || row.arrival_date > existing.arrival_date) {
+              latestByCommodity.set(key, row);
+            }
+          });
+          
+          finalData = Array.from(latestByCommodity.values());
+          console.log(`📊 Showing latest price for ${finalData.length} unique commodities from last 60 days`);
+        }
+        
         return {
           success: true,
-          data: this.transformDBToAPIFormat(exactData),
-          total: exactData.length,
+          data: this.transformDBToAPIFormat(finalData),
+          total: finalData.length,
           fromCache: false,
           source: 'database'
         };
@@ -318,9 +362,9 @@ class MarketPriceDB {
         nextDay.setDate(nextDay.getDate() + 1);
         endDate = nextDay.toISOString().split('T')[0];
       } else {
-        // For no specific date: Use last 30 days to find latest available date
+        // For no specific date: Use last 60 days to find latest prices per commodity
         const d = new Date();
-        d.setDate(d.getDate() - 30);
+        d.setDate(d.getDate() - 60);
         startDate = d.toISOString().split('T')[0];
         endDate = new Date().toISOString().split('T')[0];
       }
@@ -336,19 +380,23 @@ class MarketPriceDB {
       if (!fuzzyError && fuzzyData && fuzzyData.length > 0) {
         console.log(`✅ Fuzzy match found for "${market}": ${fuzzyData.length} records (raw)`);
         
-        // If no specific date was provided AND no commodity (market-wide query),
-        // filter to show only the LATEST date's data
+        // For market-wide queries, show LATEST price per commodity from last 60 days
         let filteredData = fuzzyData;
         if (!date && !commodity) {
-          // Find the most recent date in the results
-          const latestDate = fuzzyData.reduce((latest, row) => {
-            return !latest || row.arrival_date > latest ? row.arrival_date : latest;
-          }, null);
+          // Group by commodity and keep only the latest price for each
+          const latestByCommodity = new Map();
           
-          if (latestDate) {
-            filteredData = fuzzyData.filter(row => row.arrival_date === latestDate);
-            console.log(`📅 Filtered to latest date (${latestDate}): ${filteredData.length} records`);
-          }
+          fuzzyData.forEach(row => {
+            const key = `${row.commodity}-${row.variety || 'default'}`;
+            const existing = latestByCommodity.get(key);
+            
+            if (!existing || row.arrival_date > existing.arrival_date) {
+              latestByCommodity.set(key, row);
+            }
+          });
+          
+          filteredData = Array.from(latestByCommodity.values());
+          console.log(`📊 Showing latest price for ${filteredData.length} unique commodities from last 60 days`);
         }
         
         // Convert from RPC result to standard format
