@@ -144,8 +144,8 @@ function App() {
 
       // Extract intent from query
       const intent = await geminiService.extractQueryIntent(text, queryLanguage);
-      // DEBUG: Uncommented for debugging
-      console.log('Extracted intent:', JSON.stringify(intent, null, 2));
+      // DEBUG: Commented for performance
+      // console.log('Extracted intent:', JSON.stringify(intent, null, 2));
       
       // Handle weather queries
       if (intent.queryType === 'weather') {
@@ -241,8 +241,8 @@ function App() {
       
       // Handle general agriculture queries (not market prices)
       if (intent.queryType === 'general_agriculture') {
-        // DEBUG: Uncommented for debugging
-        console.log('General agriculture question detected, querying Gemini...');
+        // DEBUG: Commented for performance
+        // console.log('General agriculture question detected, querying Gemini...');
         
         const answer = await geminiService.answerAgricultureQuestion(text, queryLanguage);
         
@@ -447,8 +447,8 @@ function App() {
           intent.location.district,
           intent.location.state
         );
-        // DEBUG: Uncommented for debugging
-        console.log('District variations:', districtVariations);
+        // DEBUG: Commented for performance
+        // console.log('District variations:', districtVariations);
       }
 
       // Fetch market prices based on intent
@@ -465,11 +465,11 @@ function App() {
       // For market-wide queries, remove commodity filter
       if (!intent.commodity) {
         delete queryParams.commodity;
-        // DEBUG: Uncommented for debugging
-        console.log('Market-wide query detected - fetching all commodities');
+        // DEBUG: Commented for performance
+        // console.log('Market-wide query detected - fetching all commodities');
       }
-      // DEBUG: Uncommented for debugging
-      console.log('Query parameters for API:', JSON.stringify(queryParams, null, 2));
+      // DEBUG: Commented for performance
+      // console.log('Query parameters for API:', JSON.stringify(queryParams, null, 2));
 
       // Try DB first (instant), fallback to API if needed
       console.log('🔍 Trying database first...');
@@ -485,8 +485,8 @@ function App() {
       } else {
         console.log(`✅ Found ${response.data.length} records in database (${response.source})`);
       }
-      // DEBUG: Uncommented for debugging
-      console.log('API response:', response.success ? `${response.data.length} records found` : 'No data');
+      // DEBUG: Commented for performance
+      // console.log('API response:', response.success ? `${response.data.length} records found` : 'No data');
       
       if (response.success && response.data.length > 0) {
         let formattedData = marketPriceAPI.formatPriceData(response.data);
@@ -546,8 +546,8 @@ function App() {
           }
         }
         
-        // DEBUG: Uncommented for debugging
-        console.log(`Filtered to ${formattedData.length} unique latest prices`);
+        // DEBUG: Commented for performance
+        // console.log(`Filtered to ${formattedData.length} unique latest prices`);
         
         // Check if results match the requested location (district or market)
         const requestedDistrict = intent.location.district?.toLowerCase();
@@ -733,8 +733,8 @@ function App() {
         }
       } else {
         // No data found - first try to get last available price from DB
-        // DEBUG: Uncommented for debugging
-        console.log('No data found for today, checking for last available price in DB...');
+        // DEBUG: Commented for performance
+        // console.log('No data found for today, checking for last available price in DB...');
         
         const lastAvailablePrice = await marketPriceDB.getLastAvailablePrice(queryParams);
         

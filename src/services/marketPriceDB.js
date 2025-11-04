@@ -55,8 +55,14 @@ class MarketPriceDB {
 
   /**
    * Get today's prices (from API with caching, DB check with fuzzy search)
+   * Smart routing: Before 12 PM - DB only, After 12 PM - DB then API
    */
   async getTodayPrices(params) {
+    // Check current time
+    const now = new Date();
+    const currentHour = now.getHours();
+    const isBefore12PM = currentHour < 12;
+    
     // Check in-memory cache first
     const cacheKey = this.generateCacheKey(params);
     const cached = this.todayCache.get(cacheKey);
@@ -73,14 +79,14 @@ class MarketPriceDB {
 
     // Check database first (with fuzzy matching for markets)
     if (isSupabaseConfigured() && params.market) {
-      console.log('🔍 Checking database for today\'s data with fuzzy search...');
+      // console.log('🔍 Checking database for today\'s data with fuzzy search...');
       const dbResult = await this.queryWithFuzzyMarket({
         ...params,
         date: this.getTodayDate()
       });
       
       if (dbResult.success && dbResult.data.length > 0) {
-        console.log(`✅ Found ${dbResult.data.length} records in database (today's data)`);
+        // console.log(`✅ Found ${dbResult.data.length} records in database (today's data)`);
         
         // Cache in memory
         this.todayCache.set(cacheKey, {
@@ -98,8 +104,43 @@ class MarketPriceDB {
       }
     }
 
-    // Fetch from API as fallback
-    console.log('Fetching today\'s data from API...');
+    // Time-based routing: Before 12 PM, don't call API (prices not yet updated)
+    if (isBefore12PM) {
+      // console.log('⏰ Before 12 PM - Market prices not yet updated. Checking for yesterday\'s data...');
+      
+      // Try to get yesterday's data from DB
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      const yesterdayDate = yesterday.toISOString().split('T')[0];
+      
+      const yesterdayResult = await this.queryWithFuzzyMarket({
+        ...params,
+        date: yesterdayDate
+      });
+      
+      if (yesterdayResult.success && yesterdayResult.data.length > 0) {
+        return {
+          success: true,
+          data: yesterdayResult.data,
+          total: yesterdayResult.data.length,
+          fromCache: false,
+          source: 'database',
+          isYesterdayData: true,
+          message: 'Showing yesterday\'s prices. Today\'s prices will be available after 12 PM.'
+        };
+      }
+      
+      // No data available
+      return {
+        success: false,
+        data: [],
+        message: 'Market prices are updated after 12 PM. Please check back later.',
+        source: 'none'
+      };
+    }
+
+    // After 12 PM: Fetch from API as fallback
+    // console.log('Fetching today\'s data from API...');
     const response = await marketPriceAPI.fetchMarketPrices(params);
     
     if (response.success && response.data.length > 0) {
