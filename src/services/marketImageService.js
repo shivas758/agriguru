@@ -5,11 +5,14 @@
  */
 
 import commodityImageService from './commodityImageService';
+import imageCacheService from './imageCacheService';
+import { formatPrice } from '../utils/formatPrice';
 
 class MarketImageService {
   constructor() {
     this.canvas = null;
     this.ctx = null;
+    this.enableCache = true; // Enable/disable caching
   }
 
   /**
@@ -17,9 +20,10 @@ class MarketImageService {
    * @param {Array} priceData - Array of price data objects
    * @param {Object} marketInfo - Market information (name, district, state)
    * @param {number} itemsPerPage - Number of items per image (default: 12 for table layout)
+   * @param {boolean} isHistorical - Whether this is historical data
    * @returns {Promise<Array>} - Array of Base64 image data URLs
    */
-  async generateMarketPriceImages(priceData, marketInfo = {}, itemsPerPage = 12) {
+  async generateMarketPriceImages(priceData, marketInfo = {}, itemsPerPage = 12, isHistorical = false) {
     if (!priceData || priceData.length === 0) {
       throw new Error('No price data available to generate image');
     }
@@ -32,6 +36,15 @@ class MarketImageService {
 
     console.log(`Generating ${pages.length} images for ${priceData.length} items`);
 
+    // Check cache first if enabled
+    if (this.enableCache) {
+      const cachedImages = await this.getCachedImages(marketInfo, pages.length, isHistorical);
+      if (cachedImages && cachedImages.length === pages.length) {
+        console.log(`✓ Returning ${cachedImages.length} cached images`);
+        return cachedImages;
+      }
+    }
+
     // Generate each page
     const images = [];
     for (let pageIndex = 0; pageIndex < pages.length; pageIndex++) {
@@ -40,9 +53,15 @@ class MarketImageService {
         pageData, 
         marketInfo, 
         pageIndex + 1, 
-        pages.length
+        pages.length,
+        isHistorical
       );
       images.push(imageUrl);
+    }
+
+    // Cache generated images if enabled
+    if (this.enableCache) {
+      await this.cacheImages(images, marketInfo, pages.length, isHistorical);
     }
 
     return images;
@@ -54,9 +73,10 @@ class MarketImageService {
    * @param {Object} marketInfo - Market information (name, district, state)
    * @param {number} pageNumber - Current page number
    * @param {number} totalPages - Total number of pages
+   * @param {boolean} isHistorical - Whether this is historical data
    * @returns {Promise<string>} - Base64 image data URL
    */
-  async generateSinglePageImage(priceData, marketInfo = {}, pageNumber = 1, totalPages = 1) {
+  async generateSinglePageImage(priceData, marketInfo = {}, pageNumber = 1, totalPages = 1, isHistorical = false) {
     // Create canvas
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -81,11 +101,11 @@ class MarketImageService {
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
     // Draw title section (pass unscaled width)
-    this.drawTitleSection(ctx, marketInfo, canvasWidth / scale);
+    await this.drawTitleSection(ctx, marketInfo, canvasWidth / scale, isHistorical, priceData);
 
     // Draw table (pass unscaled values)
     const tableY = titleHeight / scale;
-    await this.drawTable(ctx, priceData, tableY, canvasWidth / scale);
+    await this.drawTable(ctx, priceData, tableY, canvasWidth / scale, isHistorical);
 
     // Footer (pass unscaled values)
     this.drawFooter(ctx, (canvasHeight - footerHeight) / scale, canvasWidth / scale, canvasHeight / scale, pageNumber, totalPages);
@@ -97,21 +117,27 @@ class MarketImageService {
   /**
    * Draw title section with market name and date
    */
-  drawTitleSection(ctx, marketInfo, canvasWidth) {
+  async drawTitleSection(ctx, marketInfo, canvasWidth, isHistorical = false, priceData = []) {
     const padding = 30;
+    
+    // Draw person image on the left - aligned with table edge
+    try {
+      const personImg = await this.loadImage('/image/pricephoto.png');
+      const imgSize = 100;
+      ctx.drawImage(personImg, padding, 10, imgSize, imgSize);
+    } catch (error) {
+      console.log('Could not load person image:', error);
+    }
     
     // Title
     const marketName = marketInfo.market || marketInfo.district || 'Market';
-    const location = marketInfo.district && marketInfo.state 
-      ? `${marketInfo.district}, ${marketInfo.state}` 
-      : marketInfo.state || '';
     
     ctx.fillStyle = '#dc2626';
-    ctx.font = 'bold 22px Arial, sans-serif';
+    ctx.font = 'bold 24px Arial, sans-serif';
     ctx.textAlign = 'center';
     ctx.fillText(`${marketName} Market Price Board`, canvasWidth / 2, 40);
 
-    // Date - compact for portrait
+    // Current date
     const today = new Date();
     const day = today.getDate();
     const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -119,24 +145,45 @@ class MarketImageService {
     const month = monthNames[today.getMonth()];
     const year = today.getFullYear();
     
-    ctx.fillStyle = '#1e40af';
-    ctx.font = '17px Arial, sans-serif';
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 20px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`${day} ${month} ${year}`, canvasWidth / 2, 65);
+    ctx.fillText(`${day} ${month} ${year}`, canvasWidth / 2, 70);
     
-    // Decorative line
-    ctx.strokeStyle = '#fbbf24';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.moveTo(padding, 80);
-    ctx.lineTo(canvasWidth - padding, 80);
-    ctx.stroke();
+    // Last updated date - find the most recent date from price data
+    let lastUpdatedText = '';
+    if (priceData && priceData.length > 0) {
+      // Get the most recent date from the data
+      const dates = priceData.map(item => {
+        if (!item.arrivalDate) return null;
+        const parts = item.arrivalDate.split(/[-/]/);
+        if (parts.length === 3) {
+          const [day, month, year] = parts;
+          return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+        }
+        return null;
+      }).filter(d => d && !isNaN(d.getTime()));
+      
+      if (dates.length > 0) {
+        const mostRecent = new Date(Math.max(...dates));
+        const lastDay = mostRecent.getDate();
+        const lastMonth = monthNames[mostRecent.getMonth()];
+        lastUpdatedText = `(Last Updated On ${lastDay} ${lastMonth})`;
+      }
+    }
+    
+    if (lastUpdatedText) {
+      ctx.fillStyle = '#9ca3af';
+      ctx.font = '14px Arial, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(lastUpdatedText, canvasWidth / 2, 92);
+    }
   }
 
   /**
    * Draw table with commodity prices
    */
-  async drawTable(ctx, priceData, startY, canvasWidth) {
+  async drawTable(ctx, priceData, startY, canvasWidth, isHistorical = false) {
     const padding = 30;
     const tableWidth = canvasWidth - (padding * 2);
     const tableX = padding;
@@ -161,8 +208,8 @@ class MarketImageService {
     // Draw table header
     let currentY = startY;
     
-    // Header background
-    ctx.fillStyle = '#dc2626';
+    // Header background - green
+    ctx.fillStyle = '#059669';
     ctx.fillRect(tableX, currentY, tableWidth, headerRowHeight);
     
     // Header borders
@@ -211,7 +258,7 @@ class MarketImageService {
     // Draw data rows
     for (let i = 0; i < priceData.length; i++) {
       await this.drawTableRow(ctx, priceData[i], tableX, currentY, 
-        imageColWidth, nameColWidth, minColWidth, modalColWidth, maxColWidth, rowHeight, i, commodityCount);
+        imageColWidth, nameColWidth, minColWidth, modalColWidth, maxColWidth, rowHeight, i, commodityCount, isHistorical);
       currentY += rowHeight;
     }
   }
@@ -219,7 +266,7 @@ class MarketImageService {
   /**
    * Draw a single table row
    */
-  async drawTableRow(ctx, price, x, y, imageColWidth, nameColWidth, minColWidth, modalColWidth, maxColWidth, rowHeight, index, commodityCount = {}) {
+  async drawTableRow(ctx, price, x, y, imageColWidth, nameColWidth, minColWidth, modalColWidth, maxColWidth, rowHeight, index, commodityCount = {}, isHistorical = false) {
     // Alternating row colors - softer contrast
     ctx.fillStyle = index % 2 === 0 ? '#ffffff' : '#f9fafb';
     const totalWidth = imageColWidth + nameColWidth + minColWidth + modalColWidth + maxColWidth;
@@ -262,8 +309,8 @@ class MarketImageService {
     
     // Commodity name cell with text wrapping
     ctx.strokeRect(currentX, y, nameColWidth, rowHeight);
-    ctx.fillStyle = '#b91c1c';
-    ctx.font = 'bold 18px Arial, sans-serif';
+    ctx.fillStyle = '#000000';
+    ctx.font = 'bold 20px Arial, sans-serif';
     ctx.textAlign = 'center';
     
     // Determine if we should show variety (when there are duplicates)
@@ -306,35 +353,41 @@ class MarketImageService {
       textY += lineHeight;
     });
     
-    // Draw arrival date below commodity name
+    // Draw date/year below commodity name
     if (price.arrivalDate) {
       ctx.fillStyle = '#6b7280';
       ctx.font = '11px Arial, sans-serif';
-      const formattedDate = this.formatDateCompact(price.arrivalDate);
-      ctx.fillText(formattedDate, currentX + nameColWidth / 2, textY + 3);
+      
+      // For historical data, show only the year
+      // For current data, show the full date
+      const displayText = isHistorical 
+        ? this.extractYear(price.arrivalDate)
+        : this.formatDateCompact(price.arrivalDate);
+      
+      ctx.fillText(displayText, currentX + nameColWidth / 2, textY + 3);
     }
     
     currentX += nameColWidth;
     
     // Min price cell
     ctx.strokeRect(currentX, y, minColWidth, rowHeight);
-    ctx.fillStyle = '#047857';
+    ctx.fillStyle = '#000000';
     ctx.font = 'bold 24px Arial, sans-serif';
-    ctx.fillText(price.minPrice || 'N/A', currentX + minColWidth / 2, y + rowHeight / 2 + 8);
+    ctx.fillText(formatPrice(price.minPrice), currentX + minColWidth / 2, y + rowHeight / 2 + 8);
     currentX += minColWidth;
     
-    // Modal price cell  
+    // Modal price cell - red color
     ctx.strokeRect(currentX, y, modalColWidth, rowHeight);
-    ctx.fillStyle = '#1e40af';
+    ctx.fillStyle = '#dc2626';
     ctx.font = 'bold 24px Arial, sans-serif';
-    ctx.fillText(price.modalPrice || 'N/A', currentX + modalColWidth / 2, y + rowHeight / 2 + 8);
+    ctx.fillText(formatPrice(price.modalPrice), currentX + modalColWidth / 2, y + rowHeight / 2 + 8);
     currentX += modalColWidth;
     
     // Max price cell
     ctx.strokeRect(currentX, y, maxColWidth, rowHeight);
-    ctx.fillStyle = '#dc2626';
+    ctx.fillStyle = '#000000';
     ctx.font = 'bold 24px Arial, sans-serif';
-    ctx.fillText(price.maxPrice || 'N/A', currentX + maxColWidth / 2, y + rowHeight / 2 + 8);
+    ctx.fillText(formatPrice(price.maxPrice), currentX + maxColWidth / 2, y + rowHeight / 2 + 8);
   }
 
 
@@ -384,25 +437,44 @@ class MarketImageService {
   }
 
   /**
-   * Format date in compact form for small displays (e.g., "5 Jan")
+   * Format date compactly for display (DD MMM)
    */
   formatDateCompact(dateStr) {
     if (!dateStr) return '';
     
-    // Parse DD/MM/YYYY or DD-MM-YYYY format
-    const parts = dateStr.split(/[\/\-]/);
-    if (parts.length === 3) {
-      const [day, month, year] = parts;
-      const date = new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+    try {
+      // Parse date in DD-MM-YYYY or DD/MM/YYYY format
+      const parts = dateStr.split(/[-/]/);
+      if (parts.length !== 3) return dateStr;
       
-      if (!isNaN(date.getTime())) {
-        const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                           'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-        return `${parseInt(day)} ${monthNames[date.getMonth()]}`;
-      }
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1; // 0-indexed
+      
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                         'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      
+      return `${day} ${monthNames[month]}`;
+    } catch (error) {
+      return dateStr;
     }
+  }
+
+  /**
+   * Extract year from date string for historical data display
+   */
+  extractYear(dateStr) {
+    if (!dateStr) return '';
     
-    return dateStr;
+    try {
+      // Parse date in DD-MM-YYYY or DD/MM/YYYY format
+      const parts = dateStr.split(/[-/]/);
+      if (parts.length !== 3) return dateStr;
+      
+      const year = parts[2]; // Year is the third part
+      return year;
+    } catch (error) {
+      return dateStr;
+    }
   }
 
   /**
@@ -498,6 +570,95 @@ class MarketImageService {
     } catch (error) {
       console.error('Error generating market image:', error);
       return { success: false, message: error.message };
+    }
+  }
+
+  /**
+   * Get cached images for a market
+   * @param {Object} marketInfo - Market information
+   * @param {number} totalPages - Total number of pages expected
+   * @param {boolean} isHistorical - Whether this is historical data
+   * @returns {Promise<Array|null>} Array of cached image URLs or null
+   */
+  async getCachedImages(marketInfo, totalPages, isHistorical) {
+    try {
+      const market = marketInfo.market || marketInfo.district || 'market';
+      const cacheKeys = [];
+      
+      // Generate cache keys for all pages
+      for (let page = 1; page <= totalPages; page++) {
+        const cacheKey = imageCacheService.generateCacheKey({
+          market,
+          commodity: null, // Market-wide images don't have specific commodity
+          date: null, // Use today's date
+          pageNumber: page,
+          isHistorical
+        });
+        cacheKeys.push(cacheKey);
+      }
+
+      // Fetch all cached images
+      const cachedData = await imageCacheService.getCachedImages(cacheKeys);
+      
+      // Check if all pages are cached
+      const images = [];
+      for (const key of cacheKeys) {
+        if (!cachedData[key] || !cachedData[key].image_data) {
+          // Cache miss - return null to regenerate all
+          return null;
+        }
+        images.push(cachedData[key].image_data);
+      }
+
+      return images;
+    } catch (error) {
+      console.error('Error fetching cached images:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Cache generated images
+   * @param {Array} images - Array of image data URLs
+   * @param {Object} marketInfo - Market information
+   * @param {number} totalPages - Total number of pages
+   * @param {boolean} isHistorical - Whether this is historical data
+   * @returns {Promise<void>}
+   */
+  async cacheImages(images, marketInfo, totalPages, isHistorical) {
+    try {
+      const market = marketInfo.market || marketInfo.district || 'market';
+      const district = marketInfo.district || null;
+      const state = marketInfo.state || null;
+
+      const cacheConfigs = images.map((imageData, index) => {
+        const pageNumber = index + 1;
+        const cacheKey = imageCacheService.generateCacheKey({
+          market,
+          commodity: null,
+          date: null,
+          pageNumber,
+          isHistorical
+        });
+
+        return {
+          cacheKey,
+          imageData,
+          market,
+          district,
+          state,
+          commodity: null, // Market-wide images
+          pageNumber,
+          totalPages,
+          isHistorical
+        };
+      });
+
+      // Store all images in parallel
+      await imageCacheService.storeCachedImages(cacheConfigs);
+      console.log(`✓ Cached ${images.length} market images`);
+    } catch (error) {
+      console.error('Error caching images:', error);
     }
   }
 }

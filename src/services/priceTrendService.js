@@ -15,18 +15,18 @@ class PriceTrendService {
 
   /**
    * Fetch historical price data for trend analysis
-   * Combines Supabase cache + API data for the last 30 days
+   * Combines Supabase cache + API data for the specified number of days
    */
-  async fetchHistoricalData(params) {
+  async fetchHistoricalData(params, days = 30) {
     try {
       const today = new Date();
-      const thirtyDaysAgo = new Date(today);
-      thirtyDaysAgo.setDate(today.getDate() - this.maxDays);
+      const daysAgo = new Date(today);
+      daysAgo.setDate(today.getDate() - days);
       
-      const startDate = thirtyDaysAgo.toISOString().split('T')[0];
+      const startDate = daysAgo.toISOString().split('T')[0];
       const endDate = today.toISOString().split('T')[0];
 
-      console.log(`Fetching historical data from ${startDate} to ${endDate}`);
+      console.log(`Fetching historical data from ${startDate} to ${endDate} (last ${days} days)`);
 
       // Step 1: Get data from Supabase cache
       const cachedHistory = await marketPriceCache.getHistoricalData(params, startDate, endDate);
@@ -37,9 +37,9 @@ class PriceTrendService {
         cachedHistory ? cachedHistory.map(entry => entry.cache_date) : []
       );
       
-      // Step 3: Fetch ALL available dates from API for the last 30 days
+      // Step 3: Fetch ALL available dates from API for the specified number of days
       // (Only fetch dates not in cache to optimize performance)
-      const apiHistoricalData = await this.fetchAllHistoricalDates(params, this.maxDays, cachedDates);
+      const apiHistoricalData = await this.fetchAllHistoricalDates(params, days, cachedDates);
 
       // Combine and deduplicate data by date
       const combinedData = this.combineHistoricalData(cachedHistory, apiHistoricalData);
@@ -426,10 +426,12 @@ class PriceTrendService {
 
   /**
    * Main method: Get price trends based on query
+   * @param {Object} params - Query parameters
+   * @param {number} days - Number of days to fetch trends for (default: 30)
    */
-  async getPriceTrends(params) {
+  async getPriceTrends(params, days = 30) {
     try {
-      console.log('Fetching price trends for:', params);
+      console.log(`Fetching price trends for ${days} days:`, params);
 
       // Try database first for faster results
       console.log('🔍 Trying database for price trends...');
@@ -440,7 +442,7 @@ class PriceTrendService {
         state: params.state 
       });
       
-      const dbTrends = await marketPriceDB.getPriceTrends(params, this.maxDays);
+      const dbTrends = await marketPriceDB.getPriceTrends(params, days);
       
       if (dbTrends && dbTrends.success && dbTrends.data && dbTrends.data.length >= 2) {
         console.log(`✅ Got ${dbTrends.data.length} records from database`);

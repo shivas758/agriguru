@@ -2,13 +2,18 @@ import React, { useState } from 'react';
 import { TrendingUp, TrendingDown, Minus, Download, Loader2 } from 'lucide-react';
 import commodityImageService from '../services/commodityImageService';
 import marketTrendImageService from '../services/marketTrendImageService';
+import priceTrendService from '../services/priceTrendService';
+import { formatPrice } from '../utils/formatPrice';
 
 /**
  * Market-Wide Trend Card Component
  * Compact single-card view showing all commodities with old price, new price, and change
  */
-function MarketTrendCard({ trendsData, marketInfo }) {
+function MarketTrendCard({ trendsData: initialTrendsData, marketInfo, trendQueryParams }) {
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
+  const [trendsData, setTrendsData] = useState(initialTrendsData);
+  const [selectedDays, setSelectedDays] = useState(30);
+  const [isLoadingDays, setIsLoadingDays] = useState(false);
 
   if (!trendsData || !trendsData.commodities || trendsData.commodities.length === 0) {
     return null;
@@ -24,6 +29,51 @@ function MarketTrendCard({ trendsData, marketInfo }) {
       console.error('Error generating trend images:', error);
     } finally {
       setIsGeneratingImage(false);
+    }
+  };
+
+  const handleDaySelection = async (days) => {
+    if (!trendQueryParams || isLoadingDays || days === selectedDays) return;
+    
+    try {
+      setIsLoadingDays(true);
+      setSelectedDays(days);
+      console.log(`📊 Fetching trends for ${days} days...`);
+      
+      // Call the price trend service with the new days parameter
+      const trendResult = await priceTrendService.getPriceTrends(trendQueryParams, days);
+      
+      if (trendResult.success && trendResult.type === 'market_wide') {
+        // Extract date range from commodities
+        let dateRange = { period: `Last ${days} days` };
+        if (trendResult.commodities.length > 0) {
+          const firstCommodity = trendResult.commodities[0];
+          if (firstCommodity.oldestDate && firstCommodity.newestDate) {
+            const formatDate = (dateStr) => {
+              const date = new Date(dateStr);
+              return date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+            };
+            dateRange.start = formatDate(firstCommodity.oldestDate);
+            dateRange.end = formatDate(firstCommodity.newestDate);
+          }
+        }
+        
+        // Update the trends data with new results
+        setTrendsData({
+          commodities: trendResult.commodities,
+          daysAvailable: trendResult.daysAvailable || days,
+          dateRange: dateRange,
+          source: trendResult.source
+        });
+        
+        console.log(`✅ Updated trends with ${trendResult.commodities.length} commodities for ${days} days`);
+      } else {
+        console.error('❌ Failed to fetch trends:', trendResult.message);
+      }
+    } catch (error) {
+      console.error('Error fetching trends for day selection:', error);
+    } finally {
+      setIsLoadingDays(false);
     }
   };
 
@@ -66,20 +116,26 @@ function MarketTrendCard({ trendsData, marketInfo }) {
           </button>
         </div>
         
-        {/* Quick Stats */}
-        <div className="grid grid-cols-3 gap-2 mt-1">
-          <div className="bg-green-500/20 backdrop-blur rounded-lg p-2 text-center border border-green-400/30">
-            <div className="text-xl font-bold text-green-100">{stats.rising}</div>
-            <div className="text-xs text-green-100">Rising</div>
-          </div>
-          <div className="bg-red-500/20 backdrop-blur rounded-lg p-2 text-center border border-red-400/30">
-            <div className="text-xl font-bold text-red-100">{stats.falling}</div>
-            <div className="text-xs text-red-100">Falling</div>
-          </div>
-          <div className="bg-gray-400/20 backdrop-blur rounded-lg p-2 text-center border border-gray-300/30">
-            <div className="text-xl font-bold text-gray-100">{stats.stable}</div>
-            <div className="text-xs text-gray-100">Stable</div>
-          </div>
+        {/* Day Selection Buttons */}
+        <div className="flex gap-2 mt-1 flex-wrap">
+          {[7, 15, 30, 60].map(days => (
+            <button
+              key={days}
+              onClick={() => handleDaySelection(days)}
+              disabled={isLoadingDays}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                days === selectedDays 
+                  ? 'bg-white/30 text-white border border-white/50' 
+                  : 'bg-white/10 text-white/80 hover:bg-white/20 border border-white/20'
+              }`}
+            >
+              {isLoadingDays && days === selectedDays ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                `${days} Days`
+              )}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -181,7 +237,7 @@ function CommodityRow({ trend, index }) {
       {/* Old Price */}
       <td className="p-2 text-right">
         <div>
-          <p className="text-sm font-medium text-gray-600">₹{oldPrice}</p>
+          <p className="text-sm font-medium text-gray-600">₹{formatPrice(oldPrice)}</p>
           {oldestDate && (
             <p className="text-xs text-gray-400 mt-0.5">{formatDateCompact(oldestDate)}</p>
           )}
@@ -191,7 +247,7 @@ function CommodityRow({ trend, index }) {
       {/* New Price */}
       <td className="p-2 text-right">
         <div>
-          <p className="text-sm font-bold text-blue-700">₹{currentPrice}</p>
+          <p className="text-sm font-bold text-blue-700">₹{formatPrice(currentPrice)}</p>
           {newestDate && (
             <p className="text-xs text-gray-400 mt-0.5">{formatDateCompact(newestDate)}</p>
           )}
@@ -204,7 +260,7 @@ function CommodityRow({ trend, index }) {
           <TrendIcon className={`w-4 h-4 ${style.iconColor}`} />
           <div>
             <p className={`text-sm font-bold ${style.textColor}`}>
-              {priceChange >= 0 ? '+' : ''}₹{priceChange}
+              {priceChange >= 0 ? '+' : ''}₹{formatPrice(Math.abs(priceChange))}
             </p>
             <p className={`text-xs font-semibold ${style.textColor}`}>
               {percentChange >= 0 ? '+' : ''}{percentChange}%

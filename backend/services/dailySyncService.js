@@ -2,6 +2,7 @@ import apiClient from './apiClient.js';
 import supabase, { insertMarketPrices, startSyncJob, updateSyncStatus, hasDataForDate, deleteMarketPricesForDate } from './supabaseClient.js';
 import { config } from '../config/config.js';
 import { logger, logSyncStart, logSyncComplete, logSyncError } from '../utils/logger.js';
+import imageCacheCleanupService from './imageCacheCleanupService.js';
 
 class DailySyncService {
   constructor() {
@@ -237,6 +238,41 @@ class DailySyncService {
     } catch (error) {
       logger.error('Failed to get sync health:', error);
       return { healthy: false, error: error.message };
+    }
+  }
+
+  /**
+   * Cleanup expired cached images
+   * Should be called daily, ideally after the daily sync completes
+   */
+  async cleanupImageCache() {
+    logger.info('Starting daily image cache cleanup...');
+    
+    try {
+      const result = await imageCacheCleanupService.cleanupExpiredImages();
+      
+      if (result.success) {
+        logger.info(`✓ Image cache cleanup completed: ${result.deletedCount} images deleted, ${result.freedMB} MB freed`);
+      } else {
+        logger.error(`✗ Image cache cleanup failed: ${result.error}`);
+      }
+      
+      return result;
+    } catch (error) {
+      logger.error('Image cache cleanup error:', error);
+      return { success: false, error: error.message };
+    }
+  }
+
+  /**
+   * Get image cache statistics
+   */
+  async getImageCacheStats() {
+    try {
+      return await imageCacheCleanupService.getCacheStatistics();
+    } catch (error) {
+      logger.error('Failed to get image cache stats:', error);
+      return null;
     }
   }
 }

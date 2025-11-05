@@ -51,6 +51,44 @@ async function main() {
       const health = await dailySyncService.getSyncHealth();
       printHealth(health);
       process.exit(0);
+    } else if (options.cleanupCache) {
+      // Cleanup expired image cache
+      logger.info('Running image cache cleanup...');
+      const cleanupResult = await dailySyncService.cleanupImageCache();
+      console.log('');
+      console.log('='.repeat(60));
+      console.log('Image Cache Cleanup Summary');
+      console.log('='.repeat(60));
+      console.log(`Status: ${cleanupResult.success ? '✓ SUCCESS' : '✗ FAILED'}`);
+      if (cleanupResult.success) {
+        console.log(`Deleted Images: ${cleanupResult.deletedCount || 0}`);
+        console.log(`Freed Space: ${cleanupResult.freedMB || 0} MB`);
+      } else {
+        console.log(`Error: ${cleanupResult.error}`);
+      }
+      console.log('='.repeat(60));
+      process.exit(cleanupResult.success ? 0 : 1);
+    } else if (options.cacheStats) {
+      // Show cache statistics
+      const stats = await dailySyncService.getImageCacheStats();
+      if (stats) {
+        console.log('');
+        console.log('='.repeat(60));
+        console.log('Image Cache Statistics');
+        console.log('='.repeat(60));
+        console.log(`Total Images: ${stats.total_images || 0}`);
+        console.log(`Active Images: ${stats.active_images || 0}`);
+        console.log(`Expired Images: ${stats.expired_images || 0}`);
+        console.log(`Total Size: ${stats.total_size_mb || 0} MB`);
+        console.log(`Average Access Count: ${stats.avg_access_count || 0}`);
+        if (stats.most_accessed_market) {
+          console.log(`Most Accessed Market: ${stats.most_accessed_market}`);
+        }
+        console.log('='.repeat(60));
+      } else {
+        console.log('Failed to fetch cache statistics');
+      }
+      process.exit(0);
     } else if (options.today) {
       // Sync today's data
       logger.info('Syncing today\'s data...');
@@ -127,6 +165,12 @@ function parseArguments(args) {
       case '--health':
         options.health = true;
         break;
+      case '--cleanup-cache':
+        options.cleanupCache = true;
+        break;
+      case '--cache-stats':
+        options.cacheStats = true;
+        break;
       case '--help':
       case '-h':
         options.help = true;
@@ -146,6 +190,8 @@ Options:
   --today, -t                   Sync today's data
   --backfill, -b <days>         Backfill missing dates for last N days (default: 7)
   --health                      Check sync health status
+  --cleanup-cache               Cleanup expired image cache
+  --cache-stats                 Show image cache statistics
   --help, -h                    Show this help message
 
 Examples:
@@ -163,6 +209,12 @@ Examples:
 
   # Check sync health
   node scripts/dailySync.js --health
+
+  # Cleanup expired cached images
+  node scripts/dailySync.js --cleanup-cache
+
+  # View image cache statistics
+  node scripts/dailySync.js --cache-stats
   `);
 }
 
