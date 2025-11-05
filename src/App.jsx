@@ -12,6 +12,8 @@ import marketPriceDB from './services/marketPriceDB';
 import geminiService from './services/geminiService';
 import voiceService from './services/voiceService';
 import priceTrendService from './services/priceTrendService';
+import marketSuggestionService from './services/marketSuggestionService';
+import historicalPriceService from './services/historicalPriceService';
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -96,12 +98,23 @@ function App() {
           state: locationIntent.location.state
         };
         
+        // Check if this is a 7-day forecast or single-day weather
+        const is7Day = conversationContext.is7Day === true;
+        const numberOfDays = conversationContext.numberOfDays || (is7Day ? 7 : 1);
+        
         // Get weather for the provided location
-        const weatherResult = await geminiService.getWeatherInfo(
-          conversationContext.originalQuery + ' in ' + text, 
-          location, 
-          queryLanguage
-        );
+        const weatherResult = is7Day
+          ? await geminiService.get7DayWeatherForecast(
+              conversationContext.originalQuery + ' in ' + text, 
+              location, 
+              queryLanguage,
+              numberOfDays
+            )
+          : await geminiService.getWeatherInfo(
+              conversationContext.originalQuery + ' in ' + text, 
+              location, 
+              queryLanguage
+            );
         
         if (weatherResult.success) {
           const botMessage = {
@@ -111,14 +124,21 @@ function App() {
             timestamp: new Date(),
             language: queryLanguage,
             isWeather: true,
+            is7DayWeather: is7Day,
             weatherLocation: weatherResult.location,
-            weatherQuery: conversationContext.originalQuery + ' in ' + text
+            weatherQuery: conversationContext.originalQuery + ' in ' + text,
+            forecastData: weatherResult.forecastData, // For multi-day forecast
+            numberOfDays: numberOfDays
           };
           
           setMessages(prev => [...prev, botMessage]);
           
           if (voiceEnabled && isVoice) {
-            voiceService.speak(weatherResult.message, queryLanguage);
+            // For multi-day forecast, speak a summary instead of full details
+            const summaryText = is7Day 
+              ? `${numberOfDays}-day weather forecast for ${weatherResult.location}. Check the display for detailed daily forecasts.`
+              : weatherResult.message;
+            voiceService.speak(summaryText, queryLanguage);
           }
         } else {
           const botMessage = {
@@ -145,13 +165,19 @@ function App() {
       // Extract intent from query
       const intent = await geminiService.extractQueryIntent(text, queryLanguage);
       // DEBUG: Commented for performance
-      // console.log('Extracted intent:', JSON.stringify(intent, null, 2));
+      console.log('Extracted intent:', JSON.stringify(intent, null, 2));
       
       // Handle weather queries
       if (intent.queryType === 'weather') {
         console.log('Weather query detected, getting weather info...');
         
-        const weatherResult = await geminiService.getWeatherInfo(text, intent.location, queryLanguage);
+        // Check if user wants multi-day forecast or single-day weather
+        const is7Day = intent.is7DayForecast === true;
+        const numberOfDays = intent.numberOfDays || (is7Day ? 7 : 1);
+        
+        const weatherResult = is7Day 
+          ? await geminiService.get7DayWeatherForecast(text, intent.location, queryLanguage, numberOfDays)
+          : await geminiService.getWeatherInfo(text, intent.location, queryLanguage);
         
         if (weatherResult.needsLocation) {
           // Ask user for location and set context
@@ -169,7 +195,9 @@ function App() {
           setConversationContext({
             type: 'waiting_for_weather_location',
             originalQuery: text,
-            language: queryLanguage
+            language: queryLanguage,
+            is7Day: is7Day,
+            numberOfDays: numberOfDays
           });
           
           if (voiceEnabled && isVoice) {
@@ -184,14 +212,21 @@ function App() {
             timestamp: new Date(),
             language: queryLanguage,
             isWeather: true,
+            is7DayWeather: is7Day,
             weatherLocation: weatherResult.location,
-            weatherQuery: text
+            weatherQuery: text,
+            forecastData: weatherResult.forecastData, // For multi-day forecast
+            numberOfDays: numberOfDays
           };
           
           setMessages(prev => [...prev, botMessage]);
           
           if (voiceEnabled && isVoice) {
-            voiceService.speak(weatherResult.message, queryLanguage);
+            // For multi-day forecast, speak a summary instead of full details
+            const summaryText = is7Day 
+              ? `${numberOfDays}-day weather forecast for ${weatherResult.location}. Check the display for detailed daily forecasts.`
+              : weatherResult.message;
+            voiceService.speak(summaryText, queryLanguage);
           }
         } else {
           // Error getting weather
@@ -242,7 +277,7 @@ function App() {
       // Handle general agriculture queries (not market prices)
       if (intent.queryType === 'general_agriculture') {
         // DEBUG: Commented for performance
-        // console.log('General agriculture question detected, querying Gemini...');
+        console.log('General agriculture question detected, querying Gemini...');
         
         const answer = await geminiService.answerAgricultureQuestion(text, queryLanguage);
         
@@ -361,7 +396,8 @@ function App() {
             trendsData: { 
               commodities: trendResult.commodities,
               dateRange: dateRange
-            } // Data for MarketTrendCard component
+            }, // Data for MarketTrendCard component
+            trendQueryParams: trendParams // Store params for refetching
           };
           
           setMessages(prev => [...prev, botMessage]);
@@ -402,43 +438,8 @@ function App() {
         }
       }
 
-      // Check if this is a historical query for old data
-      if (intent.isHistoricalQuery && intent.date) {
-        const dateStr = intent.date;
-        const currentYear = new Date().getFullYear();
-        
-        // Check if it's a year-only query
-        if (/^\d{4}$/.test(dateStr)) {
-          const queryYear = parseInt(dateStr, 10);
-          
-          // If query is for a year that's more than 1 year old, inform user of data limitations
-          if (queryYear < currentYear - 1) {
-            const location = intent.location.market || intent.location.district || intent.location.state || 'the requested location';
-            const commodity = intent.commodity || 'market prices';
-            
-            const historicalMessage = queryLanguage === 'hi'
-              ? `क्षमा करें, हमारे पास ${queryYear} का ऐतिहासिक डेटा उपलब्ध नहीं है।\n\nहमारा सिस्टम केवल पिछले 30 दिनों का डेटा प्रदान करता है। कृपया हाल की तारीखों के लिए कीमतें पूछें।\n\nउदाहरण: "${location} में ${commodity} की आज की कीमत क्या है?"`
-              : `Sorry, we don't have historical data for ${queryYear}.\n\nOur system provides market prices for the last 30 days only. Please ask for recent prices.\n\nExample: "What is the current price of ${commodity} in ${location}?"`;
-            
-            const botMessage = {
-              id: Date.now() + 2,
-              type: 'bot',
-              text: historicalMessage,
-              timestamp: new Date(),
-              language: queryLanguage
-            };
-            
-            setMessages(prev => [...prev, botMessage]);
-            setIsLoading(false);
-            
-            if (voiceEnabled && isVoice) {
-              voiceService.speak(historicalMessage, queryLanguage);
-            }
-            
-            return; // Exit early
-          }
-        }
-      }
+      // REMOVED: Old blocking code that prevented historical queries
+      // Now we let historical queries proceed to historicalPriceService
 
       // Get district variations (handles reorganized districts)
       let districtVariations = null;
@@ -448,32 +449,64 @@ function App() {
           intent.location.state
         );
         // DEBUG: Commented for performance
-        // console.log('District variations:', districtVariations);
+        console.log('District variations:', districtVariations);
       }
 
+      // Check if this is a district-level query (show all markets in district)
+      const isDistrictQuery = intent.isDistrictQuery === true;
+      
       // Fetch market prices based on intent
       const queryParams = {
         commodity: intent.commodity, // Can be null for market-wide queries
         commodityAliases: intent.commodityAliases, // Include aliases for better search
         state: intent.location.state,
         district: intent.location.district,
-        market: intent.location.market,
+        market: isDistrictQuery ? null : intent.location.market, // No market filter for district queries
         date: intent.date,
-        limit: intent.commodity ? 50 : 100 // More results for market-wide queries
+        limit: isDistrictQuery ? 200 : (intent.commodity ? 50 : 100) // More results for district queries
       };
       
       // For market-wide queries, remove commodity filter
       if (!intent.commodity) {
         delete queryParams.commodity;
         // DEBUG: Commented for performance
-        // console.log('Market-wide query detected - fetching all commodities');
+        console.log(isDistrictQuery ? 'District-wide query detected - fetching all markets' : 'Market-wide query detected - fetching all commodities');
       }
       // DEBUG: Commented for performance
-      // console.log('Query parameters for API:', JSON.stringify(queryParams, null, 2));
+      console.log('Query parameters for API:', JSON.stringify(queryParams, null, 2));
 
-      // Try DB first (instant), fallback to API if needed
-      console.log('🔍 Trying database first...');
-      let response = await marketPriceDB.getMarketPrices(queryParams);
+      // Check if this is a historical query with specific requirements
+      let response;
+      if (intent.isHistoricalQuery && intent.date) {
+        console.log('📅 Historical query detected, using intelligent date search...');
+        console.log('📅 Date requested:', intent.date);
+        
+        const historicalResult = await historicalPriceService.getHistoricalPrices(
+          queryParams,
+          intent.date
+        );
+        
+        console.log('📅 Historical result:', historicalResult);
+        
+        if (historicalResult.success && historicalResult.data && historicalResult.data.length > 0) {
+          response = {
+            success: true,
+            data: historicalResult.data,
+            source: historicalResult.source,
+            historicalMessage: historicalResult.message,
+            isExactDate: historicalResult.isExactDate,
+            requestedDate: historicalResult.requestedDate
+          };
+          console.log('✅ Historical data found:', response.data.length, 'records');
+        } else {
+          console.log('❌ Historical query returned no data, falling back to normal flow');
+          response = { success: false, data: [], message: historicalResult.message };
+        }
+      } else {
+        // Try DB first (instant), fallback to API if needed
+        console.log('🔍 Trying database first...');
+        response = await marketPriceDB.getMarketPrices(queryParams);
+      }
       
       // If no data in DB or error, fallback to API with cache
       if (!response.success || response.data.length === 0) {
@@ -486,7 +519,7 @@ function App() {
         console.log(`✅ Found ${response.data.length} records in database (${response.source})`);
       }
       // DEBUG: Commented for performance
-      // console.log('API response:', response.success ? `${response.data.length} records found` : 'No data');
+      console.log('API response:', response.success ? `${response.data.length} records found` : 'No data');
       
       if (response.success && response.data.length > 0) {
         let formattedData = marketPriceAPI.formatPriceData(response.data);
@@ -547,7 +580,7 @@ function App() {
         }
         
         // DEBUG: Commented for performance
-        // console.log(`Filtered to ${formattedData.length} unique latest prices`);
+        console.log(`Filtered to ${formattedData.length} unique latest prices`);
         
         // Check if results match the requested location (district or market)
         const requestedDistrict = intent.location.district?.toLowerCase();
@@ -630,10 +663,7 @@ function App() {
             const historicalData = marketPriceAPI.formatPriceData(apiHistoricalData.data);
             
             // Cache this data in Supabase for future queries
-            await marketPriceCache.set({
-              ...queryParams,
-              date: apiHistoricalData.date
-            }, apiHistoricalData.data);
+            await marketPriceCache.cachePrices(queryParams, apiHistoricalData.data);
             console.log('✓ Cached historical API data in Supabase');
             
             const location = requestedMarket || requestedDistrict;
@@ -667,18 +697,38 @@ function App() {
           }
           
           // No historical data available anywhere (Supabase + API)
-          // Show "no data available" message instead of wrong location data
+          // Check for market suggestions before showing "no data" message
           const location = requestedMarket || requestedDistrict;
+          let marketSuggestions = null;
+          
+          // Get suggestions if market was specified
+          if (requestedMarket && intent.location.district && intent.location.state) {
+            const suggestionResult = await marketSuggestionService.getMarketSuggestions({
+              market: requestedMarket,
+              district: intent.location.district,
+              state: intent.location.state
+            }, 5);
+            
+            if (suggestionResult.success && suggestionResult.suggestions.length > 0) {
+              marketSuggestions = {
+                suggestions: suggestionResult.suggestions,
+                originalMarket: suggestionResult.originalMarket,
+                type: 'spelling'
+              };
+            }
+          }
+          
           const noDataMessage = queryLanguage === 'hi'
-            ? `क्षमा करें, ${location} में ${intent.commodity} की कीमत उपलब्ध नहीं है।`
-            : `Sorry, ${intent.commodity} prices are not available for ${location}.`;
+            ? `क्षमा करें, ${location} में ${intent.commodity} की कीमत उपलब्ध नहीं है।${marketSuggestions ? '\n\nक्या आपका मतलब इनमें से किसी एक से था?' : ''}`
+            : `Sorry, ${intent.commodity} prices are not available for ${location}.${marketSuggestions ? '\n\nDid you mean one of these?' : ''}`;
           
           const botMessage = {
             id: Date.now() + 2,
             type: 'bot',
             text: noDataMessage,
             timestamp: new Date(),
-            language: queryLanguage
+            language: queryLanguage,
+            marketSuggestions: marketSuggestions
           };
           
           setMessages(prev => [...prev, botMessage]);
@@ -709,19 +759,34 @@ function App() {
         const maxResults = !intent.commodity ? 20 : 10;
         const finalDisplayData = displayData.length > 0 ? displayData : formattedData;
         
+        // For district queries, group by market and show cards (not images)
+        const displayStyle = isDistrictQuery ? 'cards' : (!intent.commodity ? 'images' : 'cards');
+        
+        // Add historical message if available
+        let finalResponseText = responseText;
+        if (response.historicalMessage) {
+          const histPrefix = queryLanguage === 'hi' 
+            ? `📅 ${response.historicalMessage}\n\n`
+            : `📅 ${response.historicalMessage}\n\n`;
+          finalResponseText = histPrefix + responseText;
+        }
+        
         const botMessage = {
           id: Date.now() + 2,
           type: 'bot',
-          text: responseText,
+          text: finalResponseText,
           timestamp: new Date(),
           language: queryLanguage,
           priceData: finalDisplayData.slice(0, maxResults),
-          fullPriceData: !intent.commodity ? finalDisplayData : null, // Full data for image generation
-          isMarketOverview: !intent.commodity, // Flag for market-wide queries
+          fullPriceData: !intent.commodity && !isDistrictQuery ? finalDisplayData : null, // Images only for market-wide (not district-wide)
+          isMarketOverview: !intent.commodity && !isDistrictQuery, // Flag for market-wide queries (images)
+          isDistrictOverview: isDistrictQuery, // Flag for district-wide queries (cards)
+          isHistoricalData: intent.isHistoricalQuery || false,
           marketInfo: !intent.commodity ? {
-            market: intent.location.market,
+            market: isDistrictQuery ? null : intent.location.market,
             district: intent.location.district,
-            state: intent.location.state
+            state: intent.location.state,
+            displayStyle: displayStyle
           } : null
         };
 
@@ -734,7 +799,7 @@ function App() {
       } else {
         // No data found - first try to get last available price from DB
         // DEBUG: Commented for performance
-        // console.log('No data found for today, checking for last available price in DB...');
+        console.log('No data found for today, checking for last available price in DB...');
         
         const lastAvailablePrice = await marketPriceDB.getLastAvailablePrice(queryParams);
         
@@ -794,10 +859,7 @@ function App() {
             const historicalData = marketPriceAPI.formatPriceData(apiHistoricalData.data);
             
             // Cache this data in Supabase for future queries
-            await marketPriceCache.set({
-              ...queryParams,
-              date: apiHistoricalData.date
-            }, apiHistoricalData.data);
+            await marketPriceCache.cachePrices(queryParams, apiHistoricalData.data);
             console.log('✓ Cached historical API data in Supabase');
             
             // For market-wide queries, show location name; for commodity queries, show commodity name
@@ -839,20 +901,42 @@ function App() {
               voiceService.speak(historicalMessage + ' ' + responseText, queryLanguage);
             }
           } else {
-            // No historical data available anywhere (Supabase + API) - show no data message
-            console.log('No historical data found anywhere. No data available.');
+            // No historical data available anywhere (Supabase + API)
+            // Check if we should show market suggestions
+            console.log('No historical data found anywhere. Checking for market suggestions...');
             
             const location = intent.location.market || intent.location.district || intent.location.state;
+            let marketSuggestions = null;
+            
+            // Get suggestions if market was specified
+            if (intent.location.market && intent.location.district && intent.location.state) {
+              const suggestionResult = await marketSuggestionService.getMarketSuggestions({
+                market: intent.location.market,
+                district: intent.location.district,
+                state: intent.location.state
+              }, 5);
+              
+              if (suggestionResult.success && suggestionResult.suggestions.length > 0) {
+                marketSuggestions = {
+                  suggestions: suggestionResult.suggestions,
+                  originalMarket: suggestionResult.originalMarket,
+                  type: 'spelling'
+                };
+                console.log(`Found ${suggestionResult.suggestions.length} market suggestions`);
+              }
+            }
+            
             const noDataMessage = queryLanguage === 'hi'
-              ? `क्षमा करें, ${location} में ${intent.commodity} की कीमत उपलब्ध नहीं है।`
-              : `Sorry, ${intent.commodity} prices are not available for ${location}.`;
+              ? `क्षमा करें, ${location} में ${intent.commodity || 'डेटा'} उपलब्ध नहीं है।${marketSuggestions ? '\n\nक्या आपका मतलब इनमें से किसी एक से था?' : ''}`
+              : `Sorry, ${intent.commodity || 'data'} ${intent.commodity ? 'prices are' : 'is'} not available for ${location}.${marketSuggestions ? '\n\nDid you mean one of these?' : ''}`;
             
             const botMessage = {
               id: Date.now() + 2,
               type: 'bot',
               text: noDataMessage,
               timestamp: new Date(),
-              language: queryLanguage
+              language: queryLanguage,
+              marketSuggestions: marketSuggestions
             };
 
             setMessages(prev => [...prev, botMessage]);
@@ -927,6 +1011,16 @@ function App() {
     setVoiceEnabled(!voiceEnabled);
   };
 
+  const handleMarketSelection = async (suggestion) => {
+    console.log('User selected market:', suggestion);
+    
+    // Create a query with the selected market
+    const query = `${suggestion.market} market prices`;
+    
+    // Send as a new message
+    await handleSendMessage(query, false, null);
+  };
+
   return (
     <div className="flex flex-col h-screen bg-gray-50">
       {/* Minimal Header */}
@@ -991,6 +1085,7 @@ function App() {
               key={message.id} 
               message={message}
               onSpeak={(msg) => voiceService.speak(msg.text, msg.language)}
+              onSelectMarket={handleMarketSelection}
             />
           ))}
           

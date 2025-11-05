@@ -1,13 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { TrendingUp, TrendingDown, Minus, Calendar, BarChart3, AlertCircle } from 'lucide-react';
 import commodityImageService from '../services/commodityImageService';
+import { formatPrice } from '../utils/formatPrice';
 
 /**
  * Price Trend Card Component
  * Displays price trends for a single commodity with visual indicators
  */
-function PriceTrendCard({ trend }) {
+function PriceTrendCard({ trend, onDaysChange }) {
   if (!trend) return null;
+  
+  const [selectedDays, setSelectedDays] = useState(30);
 
   // Determine trend icon and color
   const getTrendIcon = () => {
@@ -45,6 +48,13 @@ function PriceTrendCard({ trend }) {
   // Get commodity image
   const commodityImage = commodityImageService.getCommodityImagePath(trend.commodity);
 
+  const handleDaysChange = (days) => {
+    setSelectedDays(days);
+    if (onDaysChange) {
+      onDaysChange(days);
+    }
+  };
+
   return (
     <div className="bg-white rounded-lg shadow-lg border-2 border-gray-200 overflow-hidden">
       {/* Header with commodity info */}
@@ -69,12 +79,32 @@ function PriceTrendCard({ trend }) {
         </div>
       </div>
 
+      {/* Day Selection Buttons */}
+      <div className="bg-gray-50 p-3 border-b border-gray-200">
+        <p className="text-xs text-gray-600 mb-2 font-medium">Select Time Period:</p>
+        <div className="flex gap-2 justify-between">
+          {[7, 15, 30, 60].map(days => (
+            <button
+              key={days}
+              onClick={() => handleDaysChange(days)}
+              className={`flex-1 px-3 py-2 text-sm font-semibold rounded-lg transition-all ${
+                selectedDays === days
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-100'
+              }`}
+            >
+              {days} Days
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Main content */}
       <div className="p-6 space-y-4">
         {/* Current Price - Large display */}
         <div className="text-center pb-4 border-b-2 border-gray-200">
           <p className="text-sm text-gray-600 mb-1">Current Modal Price</p>
-          <p className="text-4xl font-bold text-blue-600">₹{trend.currentPrice}</p>
+          <p className="text-4xl font-bold text-blue-600">₹{formatPrice(trend.currentPrice)}</p>
           <p className="text-xs text-gray-500 mt-1">per Quintal</p>
           {trend.newestDate && (
             <p className="text-xs text-gray-400 mt-1">as of {formatDate(trend.newestDate)}</p>
@@ -86,7 +116,7 @@ function PriceTrendCard({ trend }) {
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-gray-700">Price Change</span>
             <span className={`text-2xl font-bold ${getTrendColor()}`}>
-              {trend.priceChange >= 0 ? '+' : ''}₹{trend.priceChange}
+              {trend.priceChange >= 0 ? '+' : ''}₹{formatPrice(Math.abs(trend.priceChange))}
             </span>
           </div>
           <div className="flex items-center justify-between">
@@ -101,7 +131,7 @@ function PriceTrendCard({ trend }) {
             </p>
             {trend.oldPrice && trend.oldestDate && (
               <p className="text-xs text-gray-500 mt-1">
-                Was ₹{trend.oldPrice} on {formatDate(trend.oldestDate)}
+                Was ₹{formatPrice(trend.oldPrice)} on {formatDate(trend.oldestDate)}
               </p>
             )}
           </div>
@@ -120,11 +150,11 @@ function PriceTrendCard({ trend }) {
         <div className="grid grid-cols-2 gap-3">
           <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
             <p className="text-xs text-gray-600 mb-1">Average Price</p>
-            <p className="text-lg font-bold text-blue-700">₹{trend.avgPrice}</p>
+            <p className="text-lg font-bold text-blue-700">₹{formatPrice(trend.avgPrice)}</p>
           </div>
           <div className="bg-purple-50 p-3 rounded-lg border border-purple-200">
             <p className="text-xs text-gray-600 mb-1">Volatility</p>
-            <p className="text-lg font-bold text-purple-700">₹{trend.volatility}</p>
+            <p className="text-lg font-bold text-purple-700">₹{formatPrice(trend.volatility)}</p>
           </div>
         </div>
 
@@ -134,14 +164,14 @@ function PriceTrendCard({ trend }) {
             <p className="text-xs text-gray-600 mb-1 flex items-center gap-1">
               <TrendingUp className="w-3 h-3" /> Peak Price
             </p>
-            <p className="text-lg font-bold text-green-700">₹{trend.peakPrice}</p>
+            <p className="text-lg font-bold text-green-700">₹{formatPrice(trend.peakPrice)}</p>
             <p className="text-xs text-gray-500">{formatDate(trend.peakDate)}</p>
           </div>
           <div className="bg-orange-50 p-3 rounded-lg border border-orange-200">
             <p className="text-xs text-gray-600 mb-1 flex items-center gap-1">
               <TrendingDown className="w-3 h-3" /> Lowest Price
             </p>
-            <p className="text-lg font-bold text-orange-700">₹{trend.troughPrice}</p>
+            <p className="text-lg font-bold text-orange-700">₹{formatPrice(trend.troughPrice)}</p>
             <p className="text-xs text-gray-500">{formatDate(trend.troughDate)}</p>
           </div>
         </div>
@@ -170,15 +200,15 @@ function PriceTrendCard({ trend }) {
           <div className="grid grid-cols-3 gap-2">
             <div className="text-center">
               <p className="text-xs text-gray-500">Min</p>
-              <p className="text-lg font-bold text-green-600">₹{trend.currentMinPrice}</p>
+              <p className="text-lg font-bold text-green-600">₹{formatPrice(trend.currentMinPrice)}</p>
             </div>
             <div className="text-center">
               <p className="text-xs text-gray-500">Modal</p>
-              <p className="text-lg font-bold text-blue-600">₹{trend.currentPrice}</p>
+              <p className="text-lg font-bold text-blue-600">₹{formatPrice(trend.currentPrice)}</p>
             </div>
             <div className="text-center">
               <p className="text-xs text-gray-500">Max</p>
-              <p className="text-lg font-bold text-red-600">₹{trend.currentMaxPrice}</p>
+              <p className="text-lg font-bold text-red-600">₹{formatPrice(trend.currentMaxPrice)}</p>
             </div>
           </div>
         </div>
@@ -199,7 +229,7 @@ function PriceTrendCard({ trend }) {
                     key={index}
                     className="flex-1 bg-blue-500 rounded-t"
                     style={{ height: `${Math.max(height, 10)}%` }}
-                    title={`${formatDate(point.date)}: ₹${point.modalPrice}`}
+                    title={`${formatDate(point.date)}: ₹${formatPrice(point.modalPrice)}`}
                   />
                 );
               })}

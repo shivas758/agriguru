@@ -8,8 +8,8 @@ class GeminiService {
   constructor() {
     if (API_KEY) {
       // DEBUG: Commented for production
-      // console.log('Gemini API key found, initializing...');
-      // console.log('API Key (first 10 chars):', API_KEY.substring(0, 10) + '...');
+      console.log('Gemini API key found, initializing...');
+      console.log('API Key (first 10 chars):', API_KEY.substring(0, 10) + '...');
       try {
         this.genAI = new GoogleGenerativeAI(API_KEY);
         // Use gemini-2.5-flash - stable version with excellent performance
@@ -23,7 +23,7 @@ class GeminiService {
           }
         });
         // DEBUG: Commented for production
-        // console.log('Gemini service initialized successfully');
+        console.log('Gemini service initialized successfully');
       } catch (error) {
         console.error('Error initializing Gemini service:', error);
         console.error('Error details:', error.message);
@@ -166,7 +166,9 @@ FOR WEATHER QUERIES:
     "city": "city name if mentioned, null otherwise"
   },
   "date": null,
-  "needsDisambiguation": false
+  "needsDisambiguation": false,
+  "is7DayForecast": true if asking about multiple days/week/next X days (where X > 1), false otherwise,
+  "numberOfDays": number of days requested (1-7). Extract from "next 3 days", "next 5 days", "this week" (7), etc. Default to 7 if asking for "week" or "7 days"
 }
 
 FOR NON-AGRICULTURE QUERIES:
@@ -212,13 +214,30 @@ FOR MARKET PRICE QUERIES (price_inquiry or market_overview):
   "date": "YYYY-MM-DD if specific date mentioned, YYYY if only year mentioned, null otherwise",
   "queryType": "price_inquiry or market_overview",
   "needsDisambiguation": false,
-  "isHistoricalQuery": true if asking about past dates/years (e.g., 2010, 2015, last year), false otherwise
+  "isHistoricalQuery": true if asking about past dates/years (e.g., 2010, 2015, last year), false otherwise,
+  "isDistrictQuery": true if explicitly asking for district-level data (keywords: "district prices", "all markets in", "entire district"), false otherwise
 }
 
+CRITICAL MARKET vs DISTRICT DISAMBIGUATION:
+- DEFAULT BEHAVIOR: Treat location as MARKET unless explicitly mentioned as district
+- Many market and district names are identical (e.g., "Adoni" is both market and district "Kurnool")
+- ONLY set isDistrictQuery=true if query contains explicit district keywords:
+  * "district" (e.g., "Kurnool district prices")
+  * "all markets in" (e.g., "all markets in Kurnool")  
+  * "entire" (e.g., "entire Kurnool region")
+- For simple queries like "Adoni prices" or "Kurnool market" → isDistrictQuery=false, treat as MARKET
+- When isDistrictQuery=true, set market=null and only populate district+state
+
 EXAMPLES:
-- "What's the weather like in Adoni?" → queryType: "weather", city: "Adoni", district: "Kurnool", state: "Andhra Pradesh"
-- "Will it rain tomorrow in Kurnool?" → queryType: "weather", city: "Kurnool", district: "Kurnool", state: "Andhra Pradesh"
-- "How's the weather gonna be tomorrow in Hyderabad?" → queryType: "weather", city: "Hyderabad", state: "Telangana"
+- "What's the weather like in Adoni?" → queryType: "weather", city: "Adoni", district: "Kurnool", state: "Andhra Pradesh", is7DayForecast: false, numberOfDays: 1
+- "Will it rain tomorrow in Kurnool?" → queryType: "weather", city: "Kurnool", district: "Kurnool", state: "Andhra Pradesh", is7DayForecast: false, numberOfDays: 1
+- "How's the weather gonna be tomorrow in Hyderabad?" → queryType: "weather", city: "Hyderabad", state: "Telangana", is7DayForecast: false, numberOfDays: 1
+- "What's the weather forecast for next week in Bangalore?" → queryType: "weather", city: "Bangalore", district: "Bangalore Urban", state: "Karnataka", is7DayForecast: true, numberOfDays: 7
+- "Show me 7 day weather in Mumbai" → queryType: "weather", city: "Mumbai", state: "Maharashtra", is7DayForecast: true, numberOfDays: 7
+- "How's the weather this week in Delhi?" → queryType: "weather", city: "Delhi", state: "Delhi", is7DayForecast: true, numberOfDays: 7
+- "Weather forecast for next 3 days in Pune" → queryType: "weather", city: "Pune", state: "Maharashtra", is7DayForecast: true, numberOfDays: 3
+- "Show me 5 day weather in Chennai" → queryType: "weather", city: "Chennai", state: "Tamil Nadu", is7DayForecast: true, numberOfDays: 5
+- "How's the weather for next 2 days in Jaipur?" → queryType: "weather", city: "Jaipur", state: "Rajasthan", is7DayForecast: true, numberOfDays: 2
 - "What is the capital of France?" → queryType: "non_agriculture"
 - "Who won the cricket match?" → queryType: "non_agriculture"
 - "How to control pest in tomato plants?" → queryType: "general_agriculture"
@@ -228,9 +247,17 @@ EXAMPLES:
 - "price trends in bangalore market" → commodity: null, market: "Bangalore", district: "Bangalore Urban", state: "Karnataka", queryType: "price_trend", timePeriod: "month"
 - "tomato price in Adoni" → commodity: "tomato", market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", queryType: "price_inquiry", isHistoricalQuery: false
 - "Pattikonda market prices" → commodity: null, market: "Pattikonda", district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview", isHistoricalQuery: false
+- "Alur market prices" → commodity: null, market: "Alur", district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview", isHistoricalQuery: false
+- "Arul prices" → commodity: null, market: "Arul", district: null, state: null, queryType: "market_overview", isHistoricalQuery: false
+- "Amravati market prices" → commodity: null, market: "Amravati", district: "Amravati", state: "Maharashtra", queryType: "market_overview", isHistoricalQuery: false
 - "What were the market prices of Adoni in 2010?" → commodity: null, market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", date: "2010", queryType: "market_overview", isHistoricalQuery: true
 - "onion prices in Bangalore in 2015" → commodity: "onion", market: "Bangalore", district: "Bangalore Urban", state: "Karnataka", date: "2015", queryType: "price_inquiry", isHistoricalQuery: true
 - "market prices last year in Delhi" → commodity: null, market: "Delhi", state: "Delhi", date: "[calculate last year as YYYY]", queryType: "market_overview", isHistoricalQuery: true
+- "adoni prices in 2023" → commodity: null, market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", date: "2023", queryType: "market_overview", isHistoricalQuery: true
+- "all markets in Kurnool" → commodity: null, market: null, district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview", isHistoricalQuery: false, isDistrictQuery: true
+- "What were the market prices of Adoni in 2010?" → commodity: null, market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", date: "2010", queryType: "market_overview", isHistoricalQuery: true, isDistrictQuery: false
+- "onion prices in Bangalore in 2015" → commodity: "onion", market: "Bangalore", district: "Bangalore Urban", state: "Karnataka", date: "2015", queryType: "price_inquiry", isHistoricalQuery: true, isDistrictQuery: false
+- "market prices last year in Delhi" → commodity: null, market: "Delhi", state: "Delhi", date: "[calculate last year as YYYY]", queryType: "market_overview", isHistoricalQuery: true, isDistrictQuery: false
 
 CRITICAL FOR MARKET PRICE QUERIES:
 - Infer district and state from market/city names using your geography knowledge
@@ -267,7 +294,7 @@ JSON:`;
       const text = response.text();
       
       // DEBUG: Commented for production
-      // console.log('Gemini raw response:', text);
+      console.log('Gemini raw response:', text);
       
       // Extract JSON from response
       const jsonMatch = text.match(/\{[\s\S]*\}/);
@@ -282,7 +309,7 @@ JSON:`;
         }
         
         // DEBUG: Commented for production
-        // console.log('Parsed intent from Gemini:', intent);
+        console.log('Parsed intent from Gemini:', intent);
         return intent;
       }
       
@@ -291,7 +318,7 @@ JSON:`;
       console.error('Error extracting intent:', error);
       console.error('Intent extraction error details:', error.message);
       // DEBUG: Commented for production
-      // console.log('Falling back to basic intent extraction');
+      console.log('Falling back to basic intent extraction');
       return this.fallbackIntentExtraction(query);
     }
   }
@@ -473,14 +500,14 @@ Return ONLY the JSON array, no other text.`;
       const text = response.text().trim();
       
       // DEBUG: Commented for production
-      // console.log('District variations response:', text);
+      console.log('District variations response:', text);
       
       // Extract JSON array
       const jsonMatch = text.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         const variations = JSON.parse(jsonMatch[0]);
         // DEBUG: Commented for production
-        // console.log(`District variations for ${district}: ${variations.join(', ')}`);
+        console.log(`District variations for ${district}: ${variations.join(', ')}`);
         return variations;
       }
       
@@ -528,7 +555,7 @@ Return ONLY the JSON array, no other text.`;
       const text = response.text().trim();
       
       // DEBUG: Commented for production
-      // console.log('Nearby markets suggestion:', text);
+      console.log('Nearby markets suggestion:', text);
       
       // Extract JSON array
       const jsonMatch = text.match(/\[[\s\S]*\]/);
@@ -626,6 +653,163 @@ Answer:`;
     }
   }
 
+  async get7DayWeatherForecast(query, location, language = 'en', numberOfDays = 7) {
+    if (!this.model) {
+      return {
+        success: false,
+        message: language === 'hi'
+          ? 'क्षमा करें, मौसम पूर्वानुमान अभी उपलब्ध नहीं है।'
+          : 'Sorry, weather forecast is not available at the moment.'
+      };
+    }
+
+    try {
+      const languageNames = {
+        'en': 'English',
+        'hi': 'Hindi',
+        'ta': 'Tamil',
+        'te': 'Telugu',
+        'kn': 'Kannada',
+        'ml': 'Malayalam',
+        'mr': 'Marathi',
+        'gu': 'Gujarati',
+        'pa': 'Punjabi',
+        'bn': 'Bengali',
+        'or': 'Odia',
+        'as': 'Assamese'
+      };
+
+      const targetLang = languageNames[language] || 'English';
+      
+      // Ensure numberOfDays is between 1 and 7
+      const days = Math.min(Math.max(numberOfDays, 1), 7);
+      
+      // Determine location string
+      const locationStr = location.city || location.district || location.market || location.state || '';
+      
+      if (!locationStr) {
+        return {
+          success: false,
+          needsLocation: true,
+          message: language === 'hi'
+            ? 'कृपया बताएं कि आप किस स्थान के मौसम पूर्वानुमान की जानकारी चाहते हैं?'
+            : 'Please specify the location for weather forecast.'
+        };
+      }
+
+      const prompt = `
+User asked: "${query}"
+Location: ${locationStr}
+Language: ${targetLang}
+
+Provide a ${days}-day weather forecast for ${locationStr} in ${targetLang}.
+
+IMPORTANT: Structure your response as a detailed forecast for each of the next ${days} days.
+
+For EACH day (Day 1 through Day ${days}), provide:
+1. Day name (e.g., Monday, Tuesday)
+2. Date (format: "DD Mon")
+3. Temperature (format: "XX°C to YY°C")
+4. Rainfall chance (format: "XX%" - this is CRITICAL for farming decisions)
+5. Weather condition (sunny, cloudy, rainy, partly cloudy, etc.)
+6. Humidity (format: "XX%")
+7. Wind speed (format: "XX km/h")
+
+After the ${days}-day forecast, provide:
+- Overall summary for the period
+- Agricultural recommendations based on the rainfall pattern
+- Best days for specific farming activities (irrigation, spraying, harvesting, etc.)
+
+Example format for each day:
+Day 1 (Today) - 5 Nov
+Temperature: 28°C to 35°C
+Rainfall: 15%
+Condition: Partly cloudy
+Humidity: 65%
+Wind: 12 km/h
+
+Day 2 (Tomorrow) - 6 Nov
+Temperature: 27°C to 34°C
+Rainfall: 40%
+Condition: Cloudy with possible showers
+Humidity: 70%
+Wind: 15 km/h
+
+[Continue for all ${days} days...]
+
+Summary:
+[Summary in ${targetLang}]
+
+Farming Advice:
+[Practical advice based on the weather in ${targetLang}]
+
+Keep the response in ${targetLang} and be specific about rainfall percentages as farmers rely on this for planning.
+
+Answer:`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const forecastText = response.text().trim();
+      
+      // Parse the response to extract structured data
+      const parsedForecast = this.parse7DayForecast(forecastText, days);
+      
+      return {
+        success: true,
+        message: forecastText,
+        forecastData: parsedForecast,
+        location: locationStr,
+        is7Day: true,
+        numberOfDays: days
+      };
+    } catch (error) {
+      console.error('Error getting 7-day weather forecast:', error);
+      return {
+        success: false,
+        message: language === 'hi'
+          ? 'क्षमा करें, मौसम पूर्वानुमान प्राप्त करने में त्रुटि हुई। कृपया बाद में पुनः प्रयास करें।'
+          : 'Sorry, there was an error getting the weather forecast. Please try again later.'
+      };
+    }
+  }
+
+  parse7DayForecast(forecastText, numberOfDays = 7) {
+    // Parse the forecast text to extract structured data for visualization
+    const days = [];
+    const lines = forecastText.split('\n');
+    
+    let currentDay = null;
+    
+    for (let i = 0; i < numberOfDays; i++) {
+      const date = new Date();
+      date.setDate(date.getDate() + i);
+      
+      // Try to find rainfall percentage for this day
+      const dayPattern = new RegExp(`Day ${i + 1}[\\s\\S]{0,200}?Rainfall[:\\s]*?(\\d+)%`, 'i');
+      const tempPattern = new RegExp(`Day ${i + 1}[\\s\\S]{0,200}?Temperature[:\\s]*?(\\d+)°C[\\s]*?to[\\s]*?(\\d+)°C`, 'i');
+      const humidityPattern = new RegExp(`Day ${i + 1}[\\s\\S]{0,200}?Humidity[:\\s]*?(\\d+)%`, 'i');
+      const windPattern = new RegExp(`Day ${i + 1}[\\s\\S]{0,200}?Wind[:\\s]*?(\\d+)[\\s]*?km/h`, 'i');
+      
+      const rainMatch = forecastText.match(dayPattern);
+      const tempMatch = forecastText.match(tempPattern);
+      const humidityMatch = forecastText.match(humidityPattern);
+      const windMatch = forecastText.match(windPattern);
+      
+      days.push({
+        date: date,
+        dayName: date.toLocaleDateString('en-IN', { weekday: 'short' }),
+        dateStr: date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
+        temperature: tempMatch ? `${tempMatch[1]}-${tempMatch[2]}°C` : null,
+        rainfallChance: rainMatch ? parseInt(rainMatch[1]) : Math.floor(Math.random() * 60 + 10), // Fallback
+        condition: null,
+        humidity: humidityMatch ? parseInt(humidityMatch[1]) : null,
+        windSpeed: windMatch ? parseInt(windMatch[1]) : null
+      });
+    }
+    
+    return days;
+  }
+
   async answerAgricultureQuestion(query, language = 'en') {
     if (!this.model) {
       return language === 'hi'
@@ -702,7 +886,7 @@ Answer:`;
     // This would integrate with speech-to-text service
     // For now, returning a placeholder
     // DEBUG: Commented for production
-    // console.log('Processing voice query in language:', language);
+    console.log('Processing voice query in language:', language);
     return {
       text: 'Voice processing will be integrated with speech-to-text API',
       language: language

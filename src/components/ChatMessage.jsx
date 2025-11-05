@@ -5,7 +5,10 @@ import commodityImageService from '../services/commodityImageService';
 import marketImageService from '../services/marketImageService';
 import PriceTrendCard from './PriceTrendCard';
 import WeatherCard from './WeatherCard';
+import WeatherForecast7Day from './WeatherForecast7Day';
 import MarketTrendCard from './MarketTrendCard';
+import MarketSuggestions from './MarketSuggestions';
+import { formatPrice } from '../utils/formatPrice';
 
 // Helper function to parse DD/MM/YYYY or DD-MM-YYYY format
 const parseDate = (dateStr) => {
@@ -83,15 +86,15 @@ const PriceCard = memo(({ price, isNearbyResult, isHistorical }) => {
       <div className="grid grid-cols-3 gap-2 mb-2.5">
         <div className="text-center">
           <p className="text-xs text-gray-500 mb-0.5">Min</p>
-          <p className="text-base font-semibold text-green-600">₹{price.minPrice}</p>
+          <p className="text-base font-semibold text-green-600">₹{formatPrice(price.minPrice)}</p>
         </div>
         <div className="text-center">
           <p className="text-xs text-gray-500 mb-0.5">Modal</p>
-          <p className="text-base font-semibold text-primary-600">₹{price.modalPrice}</p>
+          <p className="text-base font-semibold text-primary-600">₹{formatPrice(price.modalPrice)}</p>
         </div>
         <div className="text-center">
           <p className="text-xs text-gray-500 mb-0.5">Max</p>
-          <p className="text-base font-semibold text-green-600">₹{price.maxPrice}</p>
+          <p className="text-base font-semibold text-green-600">₹{formatPrice(price.maxPrice)}</p>
         </div>
       </div>
 
@@ -109,7 +112,7 @@ const PriceCard = memo(({ price, isNearbyResult, isHistorical }) => {
   );
 });
 
-const ChatMessage = ({ message, onSpeak }) => {
+const ChatMessage = ({ message, onSpeak, onSelectMarket }) => {
   const isUser = message.type === 'user';
   const isNearbyResult = message.isNearbyResult;
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
@@ -142,7 +145,9 @@ const ChatMessage = ({ message, onSpeak }) => {
     try {
       const imageDataUrls = await marketImageService.generateMarketPriceImages(
         message.fullPriceData,
-        message.marketInfo || {}
+        message.marketInfo || {},
+        12, // itemsPerPage
+        message.isHistoricalData || false // Pass historical flag
       );
       
       setGeneratedImages(imageDataUrls);
@@ -154,25 +159,10 @@ const ChatMessage = ({ message, onSpeak }) => {
   };
 
 
-  const renderDisambiguationOptions = () => {
-    if (!message.disambiguationOptions) return null;
-
-    return (
-      <div className="mt-3">
-        <p className="text-sm text-gray-600 mb-2">Did you mean:</p>
-        <div className="flex flex-wrap gap-2">
-          {message.disambiguationOptions.map((option, index) => (
-            <button
-              key={index}
-              className="px-3 py-1.5 text-sm bg-primary-50 text-primary-700 rounded-full hover:bg-primary-100 transition-colors"
-              onClick={() => console.log('Selected:', option)}
-            >
-              {option}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
+  const handleMarketSelection = (suggestion) => {
+    if (onSelectMarket) {
+      onSelectMarket(suggestion);
+    }
   };
 
   return (
@@ -189,11 +179,19 @@ const ChatMessage = ({ message, onSpeak }) => {
         {/* Show weather card for weather messages */}
         {!isUser && message.isWeather ? (
           <div className="mt-2">
-            <WeatherCard 
-              weatherInfo={message.text} 
-              location={message.weatherLocation}
-              query={message.weatherQuery}
-            />
+            {message.is7DayWeather ? (
+              <WeatherForecast7Day 
+                forecastData={message.forecastData}
+                location={message.weatherLocation}
+                numberOfDays={message.numberOfDays || 7}
+              />
+            ) : (
+              <WeatherCard 
+                weatherInfo={message.text} 
+                location={message.weatherLocation}
+                query={message.weatherQuery}
+              />
+            )}
             <div className="flex items-center gap-1 mt-2">
               <button
                 onClick={handleSpeak}
@@ -253,7 +251,14 @@ const ChatMessage = ({ message, onSpeak }) => {
         {/* Show trend card for single commodity trend */}
         {message.trend ? (
           <div className="mt-3">
-            <PriceTrendCard trend={message.trend} />
+            <PriceTrendCard 
+              trend={message.trend}
+              onDaysChange={(days) => {
+                console.log(`Day selection changed to: ${days} days`);
+                // TODO: Implement backend fetch for selected days
+                // For now, this is UI-only
+              }}
+            />
           </div>
         ) : null}
         
@@ -263,11 +268,12 @@ const ChatMessage = ({ message, onSpeak }) => {
             <MarketTrendCard 
               trendsData={message.trendsData}
               marketInfo={message.marketInfo || {}}
+              trendQueryParams={message.trendQueryParams}
             />
           </div>
         ) : null}
         
-        {/* Show images for market-wide queries, price cards for specific commodity queries */}
+        {/* Show images for market-wide queries (not district-wide) */}
         {message.isMarketOverview && message.fullPriceData ? (
           <div className="mt-3">
             {isGeneratingImage ? (
@@ -290,6 +296,49 @@ const ChatMessage = ({ message, onSpeak }) => {
               </div>
             ) : null}
           </div>
+        ) : message.isDistrictOverview && message.priceData && message.priceData.length > 0 ? (
+          /* District-wide query: Group by market and show cards */
+          <div className="mt-3">
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
+              <p className="text-sm font-medium text-gray-700">
+                Showing prices from multiple markets in {message.marketInfo?.district}, {message.marketInfo?.state}
+              </p>
+            </div>
+            {/* Group prices by market */}
+            {(() => {
+              const byMarket = {};
+              message.priceData.forEach(item => {
+                if (!byMarket[item.market]) {
+                  byMarket[item.market] = [];
+                }
+                byMarket[item.market].push(item);
+              });
+              
+              return Object.entries(byMarket).map(([marketName, items]) => (
+                <div key={marketName} className="mb-4">
+                  <h4 className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
+                    <MapPin className="w-4 h-4 text-blue-600" />
+                    {marketName} Market
+                  </h4>
+                  <div className="space-y-2">
+                    {items.slice(0, 5).map((price, index) => (
+                      <PriceCard 
+                        key={`${price.commodity}-${price.market}-${index}`} 
+                        price={price} 
+                        isNearbyResult={false}
+                        isHistorical={message.isHistoricalData}
+                      />
+                    ))}
+                    {items.length > 5 && (
+                      <p className="text-xs text-gray-500 text-center py-1">
+                        +{items.length - 5} more commodities in this market
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ));
+            })()}
+          </div>
         ) : message.priceData && message.priceData.length > 0 ? (
           <div className="mt-3">
             {message.priceData.map((price, index) => (
@@ -303,7 +352,15 @@ const ChatMessage = ({ message, onSpeak }) => {
           </div>
         ) : null}
         
-        {renderDisambiguationOptions()}
+        {/* Market suggestions for disambiguation */}
+        {message.marketSuggestions && message.marketSuggestions.suggestions && (
+          <MarketSuggestions
+            suggestions={message.marketSuggestions.suggestions}
+            originalMarket={message.marketSuggestions.originalMarket}
+            type={message.marketSuggestions.type || 'spelling'}
+            onSelectMarket={handleMarketSelection}
+          />
+        )}
         
         {!isUser && (
           <div className="flex items-center gap-1.5 mt-1.5 text-xs text-gray-400">

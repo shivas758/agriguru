@@ -37,7 +37,7 @@ class MarketPriceDB {
   /**
    * Main method: Get market prices with smart routing
    */
-  async getMarketPrices(params = {}) {
+  async getMarketPrices(params = {}, options = {}) {
     const { commodity, state, district, market, date } = params;
     
     // Determine target date
@@ -46,10 +46,10 @@ class MarketPriceDB {
     // Route to appropriate data source
     if (this.isToday(targetDate)) {
       // Today's data → API with cache
-      return await this.getTodayPrices(params);
+      return await this.getTodayPrices(params, options);
     } else {
       // Historical data → Database
-      return await this.getHistoricalPrices(params);
+      return await this.getHistoricalPrices(params, options);
     }
   }
 
@@ -169,10 +169,10 @@ class MarketPriceDB {
   /**
    * Get historical prices (from database) with fuzzy market matching
    */
-  async getHistoricalPrices(params) {
+  async getHistoricalPrices(params, options = {}) {
     if (!isSupabaseConfigured()) {
       console.warn('Supabase not configured, falling back to API');
-      return await marketPriceAPI.fetchMarketPrices(params);
+      return await marketPriceAPI.fetchMarketPrices(params, options);
     }
 
     try {
@@ -275,12 +275,12 @@ class MarketPriceDB {
       
       // No data in DB, try API as fallback
       console.warn('No data in database, falling back to API');
-      return await marketPriceAPI.fetchMarketPrices(params);
+      return await marketPriceAPI.fetchMarketPrices(params, options);
       
     } catch (error) {
       console.error('Error querying database:', error);
       // Fallback to API on error
-      return await marketPriceAPI.fetchMarketPrices(params);
+      return await marketPriceAPI.fetchMarketPrices(params, options);
     }
   }
 
@@ -350,7 +350,17 @@ class MarketPriceDB {
         };
       }
       
-      // Try fuzzy search
+      // FUZZY SEARCH DISABLED - User should get suggestions instead
+      // Return failure so App.jsx can show market suggestions
+      console.log(`❌ No exact match for "${market}" - will show suggestions to user`);
+      return {
+        success: false,
+        data: [],
+        source: 'database',
+        message: `No exact match found for market "${market}"`
+      };
+      
+      /* COMMENTED OUT - OLD FUZZY SEARCH LOGIC
       console.log(`🔍 No exact match for "${market}", trying fuzzy search...`);
       
       let startDate, endDate;
@@ -424,9 +434,10 @@ class MarketPriceDB {
       }
       
       return { success: false, data: [] };
+      END OF COMMENTED OUT FUZZY SEARCH LOGIC */
       
     } catch (error) {
-      console.error('Error in fuzzy market query:', error);
+      console.error('Error querying market prices:', error);
       return { success: false, data: [] };
     }
   }
