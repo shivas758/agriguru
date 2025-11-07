@@ -8,6 +8,8 @@ import dailySyncService from './services/dailySyncService.js';
 import bulkImportService from './services/bulkImportService.js';
 import uploadRoutes from './routes/uploadRoutes.js';
 import masterRoutes from './routes/masterRoutes.js';
+import { hourlySync, isWithinSyncHours } from './scripts/hourlySync.js';
+import { dailyCleanup } from './scripts/cleanupOnlySync.js';
 
 const app = express();
 
@@ -114,6 +116,30 @@ app.post('/api/sync/backfill', async (req, res) => {
   }
 });
 
+// Manual hourly sync trigger
+app.post('/api/sync/hourly', async (req, res) => {
+  try {
+    logger.info('Manual hourly sync triggered');
+    const result = await hourlySync();
+    res.json(result);
+  } catch (error) {
+    logger.error('Hourly sync failed:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Manual cleanup trigger
+app.post('/api/sync/cleanup', async (req, res) => {
+  try {
+    logger.info('Manual cleanup triggered');
+    const result = await dailyCleanup();
+    res.json(result);
+  } catch (error) {
+    logger.error('Cleanup failed:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Bulk import endpoint (use with caution)
 app.post('/api/import/bulk', async (req, res) => {
   try {
@@ -171,6 +197,8 @@ async function startServer() {
       console.log(`  GET  /api/sync/health           - Sync health status`);
       console.log(`  GET  /api/sync/status           - Latest sync status`);
       console.log(`  GET  /api/stats                 - Data statistics`);
+      console.log(`  POST /api/sync/hourly           - Manual hourly sync (latest prices)`);
+      console.log(`  POST /api/sync/cleanup          - Manual cleanup (old data)`);
       console.log(`  POST /api/sync/yesterday        - Sync yesterday's data`);
       console.log(`  POST /api/sync/date             - Sync specific date`);
       console.log(`  POST /api/sync/backfill         - Backfill missing dates`);
@@ -187,7 +215,8 @@ async function startServer() {
       console.log(`  GET  /api/master/markets/nearby - Get nearby markets`);
       console.log('');
       console.log('Cron Jobs:');
-      console.log(`  Daily Sync: ${config.sync.dailyTime} ${config.sync.timezone}`);
+      console.log(`  Hourly Sync: Every hour from 2pm-10pm IST (fetches latest prices)`);
+      console.log(`  Daily Cleanup: ${config.sync.dailyTime} ${config.sync.timezone} (removes old data)`);
       console.log('='.repeat(60));
     });
 
@@ -202,49 +231,74 @@ async function startServer() {
 
 // Setup cron jobs
 function setupCronJobs() {
-  // Parse cron time from config (e.g., "00:30" -> "30 0")
-  const [hours, minutes] = config.sync.dailyTime.split(':');
-  const cronExpression = `${minutes} ${hours} * * *`; // Run daily at specified time
+  logger.info('Setting up cron jobs...');
 
-  logger.info(`Setting up daily sync cron job: ${cronExpression} (${config.sync.timezone})`);
-
-  // Daily sync at configured time (default: 00:30 IST)
-  cron.schedule(cronExpression, async () => {
-    logger.info('Cron job triggered: Daily sync');
+  // 1. HOURLY SYNC: Every hour from 2pm-10pm IST (fetches latest prices)
+  // Runs at the top of every hour between 14:00 and 22:00 IST
+  cron.schedule('0 14-22 * * *', async () => {
+    logger.info('🔄 Cron job triggered: Hourly sync');
     
     try {
-      const result = await dailySyncService.syncYesterday();
+      const result = await hourlySync();
       
       if (result.success) {
-        logger.info(`Daily sync completed successfully: ${result.recordsSynced} records`);
+        logger.info(`✅ Hourly sync completed: ${result.totalInserted} new, ${result.totalUpdated} updated records`);
       } else {
-        logger.error('Daily sync failed');
+        logger.error('❌ Hourly sync failed');
       }
     } catch (error) {
-      logger.error('Daily sync cron job failed:', error);
+      logger.error('❌ Hourly sync cron job failed:', error);
+    }
+  }, {
+    timezone: 'Asia/Kolkata' // IST
+  });
+
+  logger.info('✓ Hourly sync scheduled: Every hour from 2pm-10pm IST');
+
+  // 2. DAILY CLEANUP: At 00:30 IST (removes data older than 30 days)
+  const [hours, minutes] = config.sync.dailyTime.split(':');
+  const cronExpression = `${minutes} ${hours} * * *`;
+
+  cron.schedule(cronExpression, async () => {
+    logger.info('🧹 Cron job triggered: Daily cleanup');
+    
+    try {
+      const result = await dailyCleanup();
+      
+      if (result.success) {
+        logger.info(`✅ Daily cleanup completed: ${result.cleanup.deletedCount} old records removed`);
+      } else {
+        logger.error('❌ Daily cleanup failed');
+      }
+    } catch (error) {
+      logger.error('❌ Daily cleanup cron job failed:', error);
     }
   }, {
     timezone: config.sync.timezone
   });
 
-  logger.info('✓ Cron jobs scheduled');
+  logger.info(`✓ Daily cleanup scheduled: ${cronExpression} ${config.sync.timezone}`);
 
-  // Optional: Weekly backfill to catch any missed dates
-  // Runs every Sunday at 1:00 AM
+  // 3. WEEKLY BACKFILL: Every Sunday at 1:00 AM IST (catch any missed dates)
   cron.schedule('0 1 * * 0', async () => {
-    logger.info('Cron job triggered: Weekly backfill');
+    logger.info('📦 Cron job triggered: Weekly backfill');
     
     try {
       const result = await dailySyncService.backfillMissingDates(7);
-      logger.info(`Weekly backfill completed: ${result.syncedDates} dates, ${result.totalRecords} records`);
+      logger.info(`✅ Weekly backfill completed: ${result.syncedDates} dates, ${result.totalRecords} records`);
     } catch (error) {
-      logger.error('Weekly backfill failed:', error);
+      logger.error('❌ Weekly backfill failed:', error);
     }
   }, {
     timezone: config.sync.timezone
   });
 
-  logger.info('✓ Weekly backfill scheduled (Sundays 1:00 AM)');
+  logger.info('✓ Weekly backfill scheduled (Sundays 1:00 AM IST)');
+  logger.info('');
+  logger.info('📅 Cron Schedule Summary:');
+  logger.info('   - Hourly: 2pm, 3pm, 4pm, 5pm, 6pm, 7pm, 8pm, 9pm, 10pm IST');
+  logger.info('   - Daily: 00:30 AM IST (cleanup only)');
+  logger.info('   - Weekly: Sundays 1:00 AM IST (backfill)');
 }
 
 // Graceful shutdown
