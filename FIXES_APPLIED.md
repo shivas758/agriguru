@@ -1,10 +1,12 @@
-# Fixes Applied - Oct 18, 2025
+# Fixes Applied - Nov 7, 2025
 
 ## Issue: "Paddy price in Chittoor" showing wrong locations
 
 ### Problems Identified:
-1. ❌ "paddy" commodity not mapped correctly in API
-2. ❌ District name "chittoor" not normalized to "Chittoor"
+1. "paddy" commodity not mapped correctly in API
+2. District name "chittoor" not normalized to "Chittoor"
+3. Only showing 3 results when multiple markets exist
+4. Not clearly indicating when data is from different location
 3. ❌ Only showing 3 results when multiple markets exist
 4. ❌ Not clearly indicating when data is from different location
 

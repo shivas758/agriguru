@@ -7,15 +7,13 @@ import {
 import ChatMessage from './components/ChatMessage';
 import PriceTrendCard from './components/PriceTrendCard';
 import marketPriceAPI from './services/marketPriceAPI';
-import marketPriceCache from './services/marketPriceCache';
-import marketPriceDB from './services/marketPriceDB';
+import supabaseDirect from './services/supabaseDirect';
 import geminiService from './services/geminiService';
 import voiceService from './services/voiceService';
 import priceTrendService from './services/priceTrendService';
 import marketSuggestionService from './services/marketSuggestionService';
 import historicalPriceService from './services/historicalPriceService';
 import locationService from './services/locationService';
-import masterTableService from './services/masterTableService';
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -56,6 +54,13 @@ function App() {
     
     // Check location permission on load
     checkLocationStatus();
+    
+    // Check if direct mode is available
+    if (supabaseDirect.isDirectModeAvailable()) {
+      console.log('✅ Direct mode enabled - fast queries!');
+    } else {
+      console.warn('⚠️ Direct mode not available - check environment variables');
+    }
   }, []);
   
   // Check location status
@@ -567,8 +572,30 @@ function App() {
         }
         
         try {
-          // Increase search radius to 200km to find more markets
-          const locationResult = await locationService.getNearbyMarkets(10, 200);
+          // Get user location details (district, state)
+          const position = await locationService.getCurrentPosition();
+          
+          if (position) {
+            // Use district-based search directly (simpler, faster, no coordinates needed)
+            console.log(`📍 User location: ${position.district}, ${position.state}`);
+            console.log('🔍 Searching markets in user\'s district...');
+            
+            const districtMarkets = await supabaseDirect.getMarketsInDistrict(
+              position.district,
+              position.state,
+              10
+            );
+            
+            const locationResult = {
+              success: districtMarkets.length > 0,
+              markets: districtMarkets.map(m => ({ ...m, distance: null })),
+              userLocation: position,
+              searchMethod: 'district'
+            };
+            
+            if (locationResult.success) {
+              console.log(`✅ Found ${districtMarkets.length} markets in ${position.district} district`);
+            }
           
           if (locationResult.success && locationResult.markets.length > 0) {
             // Check if first market is within reasonable distance (< 30km)
@@ -621,6 +648,9 @@ function App() {
             setMessages(prev => [...prev, noMarketsMessage]);
             setIsLoading(false);
             return;
+          }
+          } else {
+            throw new Error('Could not get user position');
           }
         } catch (err) {
           console.log('Could not get user location:', err.message);
@@ -704,26 +734,26 @@ function App() {
           response = { success: false, data: [], message: historicalResult.message };
         }
       } else {
-        // Try DB first (instant), fallback to API if needed
-        console.log('🔍 Trying database first...');
-        response = await marketPriceDB.getMarketPrices(queryParams);
+        // Query Supabase directly (fast!)
+        console.log('🔍 Querying Supabase directly...');
+        try {
+          const data = await supabaseDirect.getLatestPrices(queryParams);
+          response = {
+            success: data && data.length > 0,
+            data: data || [],
+            source: 'supabase-direct'
+          };
+          console.log(`✅ Found ${data?.length || 0} records (direct)`);
+        } catch (error) {
+          console.error('❌ Supabase error:', error);
+          response = { success: false, data: [] };
+        }
       }
       
-      // If no data in DB or error, fallback to API with cache
-      if (!response.success || response.data.length === 0) {
-        console.log('📡 No data in DB, fetching from API...');
-        response = await marketPriceCache.fetchMarketPricesWithCache(
-          queryParams,
-          districtVariations
-        );
-      } else {
-        console.log(`✅ Found ${response.data.length} records in database (${response.source})`);
-      }
-      // DEBUG: Commented for performance
-      console.log('API response:', response.success ? `${response.data.length} records found` : 'No data');
+      console.log('Query response:', response.success ? `${response.data.length} records found` : 'No data');
       
       if (response.success && response.data.length > 0) {
-        let formattedData = marketPriceAPI.formatPriceData(response.data);
+        let formattedData = supabaseDirect.formatPriceData(response.data);
         
         // Filter to show only the LATEST price per commodity (per market)
         // Group by commodity + market to get unique entries
@@ -998,22 +1028,24 @@ function App() {
           voiceService.speak(responseText, queryLanguage);
         }
       } else {
-        // No data found - first try to get last available price from DB
-        // DEBUG: Commented for performance
-        console.log('No data found for today, checking for last available price in DB...');
+        // No data found - try historical price service for last available data
+        console.log('No data found for today, checking for historical prices...');
         
-        const lastAvailablePrice = await marketPriceDB.getLastAvailablePrice(queryParams);
+        const historicalResult = await historicalPriceService.getHistoricalPrices(
+          queryParams,
+          null // Get last available
+        );
         
-        if (lastAvailablePrice && lastAvailablePrice.data.length > 0) {
-          // Found historical data in DB
-          const formattedData = marketPriceAPI.formatPriceData(lastAvailablePrice.data);
+        if (historicalResult.success && historicalResult.data && historicalResult.data.length > 0) {
+          // Found historical data
+          const formattedData = supabaseDirect.formatPriceData(historicalResult.data);
           
           // For market-wide queries, show location name; for commodity queries, show commodity name
           const querySubject = intent.commodity || (intent.location.market || intent.location.district || 'the location');
           
           const historicalMessage = queryLanguage === 'hi'
-            ? `आज के लिए ${querySubject} का डेटा उपलब्ध नहीं है।\n\nअंतिम उपलब्ध कीमत (${lastAvailablePrice.date || 'पिछली तारीख'}):`
-            : `Today's data not available for ${querySubject}.\n\nShowing last available price (${lastAvailablePrice.date || 'recent date'}):`;
+            ? `आज के लिए ${querySubject} का डेटा उपलब्ध नहीं है।\n\nअंतिम उपलब्ध कीमत (${historicalResult.message || 'पिछली तारीख'}):`
+            : `Today's data not available for ${querySubject}.\n\nShowing last available price (${historicalResult.message || 'recent date'}):`;
           
           const responseText = await geminiService.generateResponse(
             formattedData,
@@ -1047,10 +1079,11 @@ function App() {
             voiceService.speak(historicalMessage + ' ' + responseText, queryLanguage);
           }
         } else {
-          // No historical data in Supabase - try fetching from API
-          // DEBUG: Uncommented for debugging
-          console.log('No historical data in Supabase. Checking data.gov.in API for last 14 days...');
-          const apiHistoricalData = await marketPriceAPI.fetchHistoricalPrices(queryParams, 14);
+          // No historical data in Supabase
+          // Skip expensive API historical search (14+ API calls, takes 2 minutes!)
+          // Go straight to showing suggestions
+          console.log('No historical data in Supabase. Skipping API search, showing suggestions...');
+          const apiHistoricalData = { success: false, data: [] };
           
           if (apiHistoricalData.success && apiHistoricalData.data.length > 0) {
             // Found historical data from API! Cache it and show to user
@@ -1114,14 +1147,23 @@ function App() {
             // If user asked for a specific market/district, don't use their current location
             if (!intent.location.market && !intent.location.district && !intent.location.state) {
               try {
-                const locationResult = await locationService.getNearbyMarkets(5);
-                if (locationResult.success && locationResult.markets.length > 0) {
-                  locationBasedSuggestions = {
-                    markets: locationResult.markets,
-                    userLocation: locationResult.userLocation,
-                    type: 'nearby'
-                  };
-                  console.log(`Found ${locationResult.markets.length} nearby markets based on user location`);
+                const position = await locationService.getCurrentPosition();
+                if (position && position.district && position.state) {
+                  // Use district-based search (simpler, faster)
+                  const districtMarkets = await supabaseDirect.getMarketsInDistrict(
+                    position.district,
+                    position.state,
+                    5  // limit
+                  );
+                  
+                  if (districtMarkets.length > 0) {
+                    locationBasedSuggestions = {
+                      markets: districtMarkets.map(m => ({ ...m, distance: null })),
+                      userLocation: position,
+                      type: 'nearby'
+                    };
+                    console.log(`Found ${districtMarkets.length} markets in ${position.district} district`);
+                  }
                 }
               } catch (err) {
                 console.log('Location-based suggestions not available:', err.message);
@@ -1131,10 +1173,8 @@ function App() {
             // Get suggestions from master tables if market was specified
             if (intent.location.market) {
               // First check if market name needs correction using master table
-              const marketValidation = await masterTableService.validateMarket(
-                intent.location.market,
-                intent.location.state,
-                intent.location.district
+              const marketValidation = await supabaseDirect.validateMarket(
+                intent.location.market
               );
               
               if (!marketValidation.exactMatch && marketValidation.suggestions.length > 0) {
@@ -1361,34 +1401,38 @@ function App() {
         );
       }
       
-      // Fetch market prices
+      // Fetch market prices - for market selections, query by MARKET only
+      // Don't include district to avoid over-filtering
       const queryParams = {
         state: intent.location.state,
-        district: intent.location.district,
         market: intent.location.market,
         limit: 100
       };
       
-      console.log('Query parameters for API:', JSON.stringify(queryParams, null, 2));
+      console.log('Market selection: querying by MARKET only (not district)');
       
-      // Try database first, then API (same as main handleSendMessage logic)
-      console.log('🔍 Trying database first...');
-      let response = await marketPriceDB.getMarketPrices(queryParams);
+      console.log('Query parameters:', JSON.stringify(queryParams, null, 2));
       
-      // If no data in DB, fallback to API with cache
-      if (!response.success || response.data.length === 0) {
-        console.log('📡 No data in DB, fetching from API...');
-        response = await marketPriceCache.fetchMarketPricesWithCache(
-          queryParams,
-          districtVariations
-        );
+      // Query Supabase directly (fast!)
+      console.log('🔍 Querying Supabase directly...');
+      let response;
+      try {
+        const data = await supabaseDirect.getLatestPrices(queryParams);
+        response = {
+          success: data && data.length > 0,
+          data: data || []
+        };
+        console.log(`✅ Found ${data?.length || 0} records (direct)`);
+      } catch (error) {
+        console.error('❌ Supabase error:', error);
+        response = { success: false, data: [] };
       }
       
-      console.log('API response:', response.success ? `${response.data.length} records found` : 'No data');
+      console.log('Query response:', response.success ? `${response.data.length} records found` : 'No data');
       
       if (response.success && response.data.length > 0) {
         // Format data
-        let formattedData = marketPriceAPI.formatPriceData(response.data);
+        let formattedData = supabaseDirect.formatPriceData(response.data);
         
         // Get unique latest prices per commodity
         const latestPrices = new Map();
