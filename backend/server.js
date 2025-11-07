@@ -260,3 +260,8 @@ process.on('SIGTERM', () => {
 
 // Start the server
 startServer();
+
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://agrigurudev.netlify.app'  // Add this!
+];
