@@ -519,6 +519,50 @@ function App() {
         return;
       }
       
+      // ✅ FIX 1: Validate market name BEFORE searching (spell check)
+      if (intent.location && intent.location.market) {
+        console.log(`🔍 Validating market name: "${intent.location.market}"`);
+        const marketValidation = await supabaseDirect.validateMarket(
+          intent.location.market
+        );
+        
+        if (!marketValidation.exactMatch && marketValidation.suggestions.length > 0) {
+          // Market name is misspelled - show suggestions immediately
+          const topSuggestion = marketValidation.suggestions[0];
+          console.log(`⚠️ "${intent.location.market}" not found. Top suggestion: "${topSuggestion.market}" (similarity: ${topSuggestion.similarity})`);
+          
+          const suggestionMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: queryLanguage === 'hi'
+              ? `"${intent.location.market}" नहीं मिला। क्या आपका मतलब यह था?`
+              : `"${intent.location.market}" not found. Did you mean:`,
+            timestamp: new Date(),
+            language: queryLanguage,
+            marketSuggestions: {
+              suggestions: marketValidation.suggestions.slice(0, 5).map(m => ({
+                market: m.market,
+                district: m.district,
+                state: m.state,
+                similarity: m.similarity
+              })),
+              originalMarket: intent.location.market,
+              type: 'spelling'
+            }
+          };
+          
+          setMessages(prev => [...prev, suggestionMessage]);
+          setIsLoading(false);
+          return;
+        } else if (marketValidation.exactMatch) {
+          // Exact match found - use validated market name
+          intent.location.market = marketValidation.market.market;
+          intent.location.district = marketValidation.market.district;
+          intent.location.state = marketValidation.market.state;
+          console.log(`✅ Validated: "${intent.location.market}" → ${intent.location.market}, ${intent.location.district}`);
+        }
+      }
+      
       // Check if disambiguation is needed (for market price queries)
       if (intent.needsDisambiguation) {
         const locations = await marketPriceAPI.searchMarkets(
@@ -1028,24 +1072,35 @@ function App() {
           voiceService.speak(responseText, queryLanguage);
         }
       } else {
-        // No data found - try historical price service for last available data
-        console.log('No data found for today, checking for historical prices...');
+        // No data found - try Supabase for last available data (skip expensive 14-day API search)
+        console.log('No data found for today, checking Supabase for last available price...');
         
-        const historicalResult = await historicalPriceService.getHistoricalPrices(
-          queryParams,
-          null // Get last available
-        );
+        // ✅ FIX 3: Query Supabase directly for historical data (fast!)
+        // Skip historicalPriceService which makes 14 API calls (slow!)
+        const historicalResult = await supabaseDirect.getLastAvailablePrice(queryParams);
         
-        if (historicalResult.success && historicalResult.data && historicalResult.data.length > 0) {
-          // Found historical data
-          const formattedData = supabaseDirect.formatPriceData(historicalResult.data);
+        // Convert to expected format
+        const formattedHistoricalResult = historicalResult && historicalResult.length > 0 ? {
+          success: true,
+          data: historicalResult,
+          message: 'Last available price from database'
+        } : {
+          success: false,
+          data: []
+        };
+        
+        if (formattedHistoricalResult.success && formattedHistoricalResult.data && formattedHistoricalResult.data.length > 0) {
+          // Found historical data in Supabase
+          const formattedData = supabaseDirect.formatPriceData(formattedHistoricalResult.data);
           
           // For market-wide queries, show location name; for commodity queries, show commodity name
           const querySubject = intent.commodity || (intent.location.market || intent.location.district || 'the location');
           
+          // Get the actual date from the data
+          const lastDate = formattedData[0]?.arrivalDate || 'recent date';
           const historicalMessage = queryLanguage === 'hi'
-            ? `आज के लिए ${querySubject} का डेटा उपलब्ध नहीं है।\n\nअंतिम उपलब्ध कीमत (${historicalResult.message || 'पिछली तारीख'}):`
-            : `Today's data not available for ${querySubject}.\n\nShowing last available price (${historicalResult.message || 'recent date'}):`;
+            ? `आज के लिए ${querySubject} का डेटा उपलब्ध नहीं है।\n\nअंतिम उपलब्ध कीमत (${lastDate}):`
+            : `Today's data not available for ${querySubject}.\n\nShowing last available price (${lastDate}):`;  
           
           const responseText = await geminiService.generateResponse(
             formattedData,
@@ -1080,9 +1135,8 @@ function App() {
           }
         } else {
           // No historical data in Supabase
-          // Skip expensive API historical search (14+ API calls, takes 2 minutes!)
-          // Go straight to showing suggestions
-          console.log('No historical data in Supabase. Skipping API search, showing suggestions...');
+          // ✅ FIX 3: Skip expensive 14-day API search (makes 14+ parallel API calls!)
+          console.log('No historical data in Supabase. Skipping expensive 14-day API search...');
           const apiHistoricalData = { success: false, data: [] };
           
           if (apiHistoricalData.success && apiHistoricalData.data.length > 0) {
@@ -1192,38 +1246,32 @@ function App() {
               }
             }
             
-            // If no spelling suggestions, get geographically nearby markets
-            if (!marketSuggestions && !locationBasedSuggestions && intent.location.market) {
+            // ✅ FIX 2: Get nearby markets from Supabase directly (no backend call!)
+            if (!marketSuggestions && !locationBasedSuggestions && intent.location.district && intent.location.state) {
               try {
-                // Try to get coordinates for the specified market location
-                // Call backend geocoding API to get nearby markets
-                const response = await fetch(
-                  `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/master/markets/nearest?` +
-                  `market=${encodeURIComponent(intent.location.market)}&` +
-                  `district=${encodeURIComponent(intent.location.district || '')}&` +
-                  `state=${encodeURIComponent(intent.location.state || '')}&` +
-                  `limit=5`
+                console.log(`🔍 Getting markets in ${intent.location.district} district...`);
+                const districtMarkets = await supabaseDirect.getMarketsInDistrict(
+                  intent.location.district,
+                  intent.location.state,
+                  5  // limit
                 );
                 
-                if (response.ok) {
-                  const data = await response.json();
-                  if (data.success && data.data && data.data.length > 0) {
-                    marketSuggestions = {
-                      suggestions: data.data.map(m => ({
-                        market: m.market,
-                        district: m.district,
-                        state: m.state,
-                        distance: m.distance,
-                        distanceText: m.distanceText
-                      })),
-                      originalMarket: intent.location.market,
-                      type: 'geographically_nearby'
-                    };
-                    console.log(`Found ${data.data.length} geographically nearby markets`);
-                  }
+                if (districtMarkets.length > 0) {
+                  marketSuggestions = {
+                    suggestions: districtMarkets.map(m => ({
+                      market: m.market,
+                      district: m.district,
+                      state: m.state,
+                      distance: null,
+                      distanceText: 'Same district'
+                    })),
+                    originalMarket: intent.location.market,
+                    type: 'same_district'
+                  };
+                  console.log(`Found ${districtMarkets.length} markets in ${intent.location.district} district`);
                 }
               } catch (err) {
-                console.log('Could not get geographic suggestions:', err);
+                console.log('Could not get district markets:', err);
               }
             }
             
