@@ -406,6 +406,52 @@ function App() {
         return;
       }
       
+      // ✅ UNIVERSAL MARKET VALIDATION: Apply to ALL queries with market location
+      // (price trends, market prices, district search, weather with market)
+      if (intent.location && intent.location.market) {
+        console.log(`🔍 [Universal] Validating market name: "${intent.location.market}"`);
+        const marketValidation = await supabaseDirect.validateMarket(
+          intent.location.market
+        );
+        
+        if (!marketValidation.exactMatch && marketValidation.suggestions.length > 0) {
+          // Market name is misspelled - show suggestions immediately
+          const topSuggestion = marketValidation.suggestions[0];
+          console.log(`⚠️ "${intent.location.market}" not found. Did you mean "${topSuggestion.market}"?`);
+          
+          const suggestionMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: queryLanguage === 'hi'
+              ? `"${intent.location.market}" नहीं मिला। क्या आपका मतलब यह था?`
+              : `"${intent.location.market}" not found. Did you mean:`,
+            timestamp: new Date(),
+            language: queryLanguage,
+            marketSuggestions: {
+              suggestions: marketValidation.suggestions.slice(0, 5).map(m => ({
+                market: m.market,
+                district: m.district,
+                state: m.state,
+                similarity: m.similarity
+              })),
+              originalMarket: intent.location.market,
+              type: 'spelling',
+              queryType: intent.queryType // Preserve query type for re-execution
+            }
+          };
+          
+          setMessages(prev => [...prev, suggestionMessage]);
+          setIsLoading(false);
+          return;
+        } else if (marketValidation.exactMatch) {
+          // Exact match found - use validated market name
+          intent.location.market = marketValidation.market.market;
+          intent.location.district = marketValidation.market.district;
+          intent.location.state = marketValidation.market.state;
+          console.log(`✅ Validated: "${intent.location.market}" → ${intent.location.market}, ${intent.location.district}`);
+        }
+      }
+      
       // Handle price trend queries
       if (intent.queryType === 'price_trend') {
         console.log('Price trend query detected, fetching historical data...');
@@ -519,49 +565,8 @@ function App() {
         return;
       }
       
-      // ✅ FIX 1: Validate market name BEFORE searching (spell check)
-      if (intent.location && intent.location.market) {
-        console.log(`🔍 Validating market name: "${intent.location.market}"`);
-        const marketValidation = await supabaseDirect.validateMarket(
-          intent.location.market
-        );
-        
-        if (!marketValidation.exactMatch && marketValidation.suggestions.length > 0) {
-          // Market name is misspelled - show suggestions immediately
-          const topSuggestion = marketValidation.suggestions[0];
-          console.log(`⚠️ "${intent.location.market}" not found. Top suggestion: "${topSuggestion.market}" (similarity: ${topSuggestion.similarity})`);
-          
-          const suggestionMessage = {
-            id: Date.now() + 1,
-            type: 'bot',
-            text: queryLanguage === 'hi'
-              ? `"${intent.location.market}" नहीं मिला। क्या आपका मतलब यह था?`
-              : `"${intent.location.market}" not found. Did you mean:`,
-            timestamp: new Date(),
-            language: queryLanguage,
-            marketSuggestions: {
-              suggestions: marketValidation.suggestions.slice(0, 5).map(m => ({
-                market: m.market,
-                district: m.district,
-                state: m.state,
-                similarity: m.similarity
-              })),
-              originalMarket: intent.location.market,
-              type: 'spelling'
-            }
-          };
-          
-          setMessages(prev => [...prev, suggestionMessage]);
-          setIsLoading(false);
-          return;
-        } else if (marketValidation.exactMatch) {
-          // Exact match found - use validated market name
-          intent.location.market = marketValidation.market.market;
-          intent.location.district = marketValidation.market.district;
-          intent.location.state = marketValidation.market.state;
-          console.log(`✅ Validated: "${intent.location.market}" → ${intent.location.market}, ${intent.location.district}`);
-        }
-      }
+      // ✅ Market validation already done universally above (line 409-453)
+      // No need to validate again - proceed directly to query processing
       
       // Check if disambiguation is needed (for market price queries)
       if (intent.needsDisambiguation) {
