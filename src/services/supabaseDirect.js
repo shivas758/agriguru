@@ -80,6 +80,40 @@ export const getLatestPrices = async (params) => {
 };
 
 /**
+ * Get last available price for a query (historical fallback)
+ * Returns the most recent data available, regardless of how old
+ */
+export const getLastAvailablePrice = async (params) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  console.log('🔍 Searching for last available price...');
+
+  let query = supabase
+    .from('market_prices')
+    .select('*')
+    .order('arrival_date', { ascending: false });
+
+  // Apply filters (only non-null values)
+  if (params.state) query = query.ilike('state', `%${params.state}%`);
+  if (params.district) query = query.ilike('district', `%${params.district}%`);
+  if (params.market) query = query.ilike('market', `%${params.market}%`);
+  if (params.commodity) query = query.ilike('commodity', `%${params.commodity}%`);
+
+  // Limit to reasonable number
+  query = query.limit(params.limit || 100);
+
+  const { data, error } = await query;
+  
+  if (error) {
+    console.error('❌ Supabase query error:', error);
+    throw error;
+  }
+
+  console.log(`✅ Found ${data?.length || 0} historical records`);
+  return data || [];
+};
+
+/**
  * Get all active markets
  */
 export const getMarkets = async (limit = 1000) => {
@@ -143,8 +177,8 @@ export const validateMarket = async (marketName) => {
     }))
     .filter(m => m.similarity > 0.5)
     .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, 5)
-    .map(({ similarity, ...market }) => market);
+    .slice(0, 5);
+    // Keep similarity in suggestions
 
   return {
     exactMatch: false,
@@ -183,8 +217,8 @@ export const validateCommodity = async (commodityName) => {
     }))
     .filter(c => c.similarity > 0.5)
     .sort((a, b) => b.similarity - a.similarity)
-    .slice(0, 5)
-    .map(({ similarity, ...commodity }) => commodity);
+    .slice(0, 5);
+    // Keep similarity in suggestions
 
   return {
     exactMatch: false,
@@ -359,6 +393,7 @@ export const formatPriceData = (data) => {
 export default {
   getMarketPrices,
   getLatestPrices,
+  getLastAvailablePrice,
   getMarkets,
   getCommodities,
   validateMarket,
