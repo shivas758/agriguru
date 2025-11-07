@@ -1,6 +1,7 @@
 {
   "name": "agriguru-market-price",
   "version": "1.0.0",
+  "type": "module",
   "description": "PWA for fetching Indian market prices with voice chat",
   "scripts": {
     "dev": "vite",

@@ -11,6 +11,7 @@
  */
 
 import dailySyncService from '../services/dailySyncService.js';
+import dataRetentionService from '../services/dataRetentionService.js';
 import { validateConfig } from '../config/config.js';
 import { logger } from '../utils/logger.js';
 import { testConnection } from '../services/supabaseClient.js';
@@ -133,6 +134,52 @@ async function main() {
     }
     
     console.log('='.repeat(60));
+
+    // Auto-cleanup old data after successful sync (30-day retention)
+    if (result.success && result.recordsSynced > 0) {
+      console.log('\n🗑️  Cleaning up old data (30-day retention policy)...');
+      try {
+        const cleanupResult = await dataRetentionService.cleanupOldPrices(30);
+        if (cleanupResult.success) {
+          if (cleanupResult.deletedCount > 0) {
+            console.log(`✅ Deleted ${cleanupResult.deletedCount} records older than ${cleanupResult.cutoffDate}`);
+          } else {
+            console.log('✅ No old records to delete');
+          }
+        } else {
+          console.warn('⚠️  Cleanup failed:', cleanupResult.error);
+        }
+      } catch (error) {
+        console.warn('⚠️  Failed to cleanup old data:', error.message);
+      }
+      
+      // Get storage stats
+      try {
+        const stats = await dataRetentionService.getStorageStats();
+        if (stats) {
+          console.log(`\n📊 Storage Stats:`);
+          console.log(`   Total Records: ${stats.totalRecords.toLocaleString()}`);
+          console.log(`   Date Range: ${stats.oldestDate} to ${stats.newestDate}`);
+          console.log(`   Days of Data: ${stats.daysOfData}`);
+          console.log(`   Estimated Size: ~${stats.estimatedSizeMB} MB`);
+        }
+      } catch (error) {
+        // Ignore stats errors
+      }
+      
+      console.log('\n📊 Syncing master tables from database...');
+      try {
+        const { execSync } = await import('child_process');
+        execSync('node scripts/syncMastersFromDB.js', {
+          cwd: process.cwd(),
+          stdio: 'inherit'
+        });
+        console.log('✅ Master tables synchronized\n');
+      } catch (error) {
+        console.warn('⚠️  Failed to sync master tables:', error.message);
+        console.warn('   Run "npm run sync:masters:db" manually to update master tables\n');
+      }
+    }
 
     process.exit(result.success ? 0 : 1);
 

@@ -7,6 +7,7 @@ import { testConnection, getLatestSyncStatus, getDataStats } from './services/su
 import dailySyncService from './services/dailySyncService.js';
 import bulkImportService from './services/bulkImportService.js';
 import uploadRoutes from './routes/uploadRoutes.js';
+import masterRoutes from './routes/masterRoutes.js';
 
 const app = express();
 
@@ -138,6 +139,9 @@ app.post('/api/import/bulk', async (req, res) => {
 // Upload routes (for feeders)
 app.use('/api/upload', uploadRoutes);
 
+// Master tables routes
+app.use('/api/master', masterRoutes);
+
 // Start server
 async function startServer() {
   try {
@@ -174,6 +178,13 @@ async function startServer() {
       console.log(`  POST /api/upload/manual         - Manual data entry upload`);
       console.log(`  POST /api/upload/batch          - Batch upload (OCR)`);
       console.log(`  GET  /api/upload/recent         - Get recent uploads`);
+      console.log('');
+      console.log('Master Table Endpoints:');
+      console.log(`  GET  /api/master/commodities    - Get commodities master`);
+      console.log(`  GET  /api/master/markets        - Get markets master`);
+      console.log(`  GET  /api/master/markets/validate - Validate market name`);
+      console.log(`  GET  /api/master/commodities/validate - Validate commodity`);
+      console.log(`  GET  /api/master/markets/nearby - Get nearby markets`);
       console.log('');
       console.log('Cron Jobs:');
       console.log(`  Daily Sync: ${config.sync.dailyTime} ${config.sync.timezone}`);

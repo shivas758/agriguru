@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: agriguru-backend
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: DATA_GOV_API_KEY
+        sync: false

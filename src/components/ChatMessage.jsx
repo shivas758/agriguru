@@ -362,6 +362,70 @@ const ChatMessage = ({ message, onSpeak, onSelectMarket }) => {
           />
         )}
         
+        {/* Location-based suggestions */}
+        {message.locationBasedSuggestions && (
+          <div className="bg-green-50 border border-green-200 rounded-lg p-4 my-3">
+            <p className="text-sm font-medium text-gray-700 mb-3">
+              📍 Markets near {message.locationBasedSuggestions.userLocation.city || message.locationBasedSuggestions.userLocation.district}:
+            </p>
+            <MarketSuggestions
+              suggestions={message.locationBasedSuggestions.markets}
+              originalMarket=""
+              type="nearby"
+              onSelectMarket={handleMarketSelection}
+            />
+          </div>
+        )}
+        
+        {/* Location permission request */}
+        {(message.showLocationRequest || message.showLocationPrompt) && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 my-3">
+            <p className="text-sm text-gray-700 mb-2">
+              📍 Enable location access to get prices from nearby markets
+            </p>
+            <button
+              onClick={() => {
+                import('../services/locationService').then(module => {
+                  module.default.requestLocationPermission().then(result => {
+                    if (result.success) {
+                      // Reload the page or trigger app state update
+                      window.location.reload();
+                    } else {
+                      alert('Unable to get location. Please ensure location permissions are enabled in your browser settings.');
+                    }
+                  });
+                });
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+            >
+              Enable Location
+            </button>
+          </div>
+        )}
+        
+        {/* Enhanced suggestions display */}
+        {message.suggestions && (
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 my-3">
+            {message.suggestions.map((suggestion, index) => (
+              <button
+                key={index}
+                onClick={() => {
+                  if (suggestion.type === 'commodity') {
+                    // Handle commodity suggestion click
+                    console.log('Selected commodity:', suggestion.value);
+                  } else if (suggestion.type === 'market') {
+                    // Handle market suggestion click
+                    handleMarketSelection(suggestion);
+                  }
+                }}
+                className="w-full text-left p-2 hover:bg-yellow-100 rounded-lg transition-colors mb-2"
+              >
+                <span className="font-medium">{suggestion.display}</span>
+              </button>
+            ))}
+          </div>
+        )}
+        
         {!isUser && (
           <div className="flex items-center gap-1.5 mt-1.5 text-xs text-gray-400">
             <span>

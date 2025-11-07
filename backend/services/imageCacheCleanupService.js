@@ -3,7 +3,7 @@
  * Handles cleanup of expired cached market price images
  */
 
-import { supabase } from '../../src/services/supabaseClient.js';
+import supabase from './supabaseClient.js';
 import { logger } from '../utils/logger.js';
 
 class ImageCacheCleanupService {

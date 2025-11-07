@@ -13,6 +13,12 @@ function MarketSuggestions({ suggestions, originalMarket, onSelectMarket, type =
       return `Did you mean one of these markets? (looking for "${originalMarket}")`;
     } else if (type === 'location') {
       return `"${originalMarket}" exists in multiple locations. Please select:`;
+    } else if (type === 'geographically_nearby') {
+      return `"${originalMarket}" data not available. Try these nearby markets:`;
+    } else if (type === 'district_based') {
+      return `"${originalMarket}" data not available. Try these markets from the same district:`;
+    } else if (type === 'nearby') {
+      return 'Markets near your location:';
     }
     return 'Please select a market:';
   };
@@ -42,6 +48,11 @@ function MarketSuggestions({ suggestions, originalMarket, onSelectMarket, type =
                 {suggestion.similarity && (
                   <p className="text-xs text-blue-600 mt-0.5">
                     {suggestion.similarity}% match
+                  </p>
+                )}
+                {suggestion.distanceText && (
+                  <p className="text-xs text-green-600 mt-0.5">
+                    📍 {suggestion.distanceText}
                   </p>
                 )}
               </div>

@@ -14,6 +14,8 @@ import voiceService from './services/voiceService';
 import priceTrendService from './services/priceTrendService';
 import marketSuggestionService from './services/marketSuggestionService';
 import historicalPriceService from './services/historicalPriceService';
+import locationService from './services/locationService';
+import masterTableService from './services/masterTableService';
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -26,6 +28,8 @@ function App() {
   const [showSettings, setShowSettings] = useState(false);
   const [interimTranscript, setInterimTranscript] = useState('');
   const [conversationContext, setConversationContext] = useState(null);
+  const [userLocation, setUserLocation] = useState(null);
+  const [locationStatus, setLocationStatus] = useState('checking'); // 'checking', 'enabled', 'disabled', 'denied'
   
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -49,7 +53,43 @@ function App() {
         .then(() => console.log('Microphone permission granted'))
         .catch((err) => console.error('Microphone permission denied:', err));
     }
+    
+    // Check location permission on load
+    checkLocationStatus();
   }, []);
+  
+  // Check location status
+  const checkLocationStatus = async () => {
+    try {
+      setLocationStatus('checking');
+      
+      // Check if location service already has permission
+      if (locationService.hasLocationPermission()) {
+        const position = locationService.getCurrentPosition();
+        if (position) {
+          const locationDetails = await locationService.getLocationFromCoordinates(
+            position.latitude,
+            position.longitude
+          );
+          setUserLocation(locationDetails);
+          setLocationStatus('enabled');
+          return;
+        }
+      }
+      
+      // Try to request location permission silently
+      const result = await locationService.requestLocationPermission();
+      if (result.success) {
+        setUserLocation(result.locationDetails);
+        setLocationStatus('enabled');
+      } else {
+        setLocationStatus('disabled');
+      }
+    } catch (error) {
+      console.error('Error checking location:', error);
+      setLocationStatus('disabled');
+    }
+  };
 
   useEffect(() => {
     scrollToBottom();
@@ -166,6 +206,68 @@ function App() {
       const intent = await geminiService.extractQueryIntent(text, queryLanguage);
       // DEBUG: Commented for performance
       console.log('Extracted intent:', JSON.stringify(intent, null, 2));
+      
+      // Check if master table validation found spelling mistakes and needs clarification
+      if (intent.needsDisambiguation && intent.suggestions) {
+        let clarificationMessage = '';
+        const suggestions = [];
+        
+        // Handle commodity suggestions
+        if (intent.suggestions.commodities && intent.suggestions.commodities.length > 0) {
+          clarificationMessage += queryLanguage === 'hi' 
+            ? 'क्या आपका मतलब इनमें से कोई वस्तु है?\n' 
+            : 'Did you mean one of these commodities?\n';
+          
+          intent.suggestions.commodities.slice(0, 3).forEach((commodity, idx) => {
+            suggestions.push({
+              type: 'commodity',
+              value: commodity.commodity_name,
+              display: commodity.commodity_name,
+              commodity_name: commodity.commodity_name,
+              category: commodity.category
+            });
+          });
+        }
+        
+        // Handle market suggestions
+        if (intent.suggestions.markets && intent.suggestions.markets.length > 0) {
+          clarificationMessage += queryLanguage === 'hi' 
+            ? 'क्या आपका मतलब इनमें से कोई बाजार है?\n' 
+            : 'Did you mean one of these markets?\n';
+          
+          intent.suggestions.markets.slice(0, 3).forEach((market, idx) => {
+            suggestions.push({
+              type: 'market',
+              value: `${market.market}, ${market.district}`,
+              display: `${market.market} (${market.district}, ${market.state})`,
+              market: market.market,
+              district: market.district,
+              state: market.state
+            });
+          });
+        }
+        
+        if (suggestions.length > 0) {
+          const disambiguationMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: clarificationMessage,
+            timestamp: new Date(),
+            language: queryLanguage,
+            suggestions: suggestions,
+            originalIntent: intent
+          };
+          
+          setMessages(prev => [...prev, disambiguationMessage]);
+          
+          if (voiceEnabled && isVoice) {
+            voiceService.speak(clarificationMessage, queryLanguage);
+          }
+          
+          setIsLoading(false);
+          return;
+        }
+      }
       
       // Handle weather queries
       if (intent.queryType === 'weather') {
@@ -440,6 +542,105 @@ function App() {
 
       // REMOVED: Old blocking code that prevented historical queries
       // Now we let historical queries proceed to historicalPriceService
+
+      // If no location specified at all, try to use user's location
+      if (!intent.location.market && !intent.location.district && !intent.location.state) {
+        console.log('No location specified, attempting to use user location...');
+        
+        // Check if location access is available
+        if (locationStatus === 'disabled' || !locationService.hasLocationPermission()) {
+          // Ask user to specify location or enable location access
+          const promptMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: queryLanguage === 'hi' 
+              ? 'कृपया बाजार का स्थान बताएं या अपना वर्तमान स्थान सक्षम करें।'
+              : 'Please specify a market location or enable location access to get prices from nearby markets.',
+            timestamp: new Date(),
+            language: queryLanguage,
+            showLocationPrompt: true
+          };
+          
+          setMessages(prev => [...prev, promptMessage]);
+          setIsLoading(false);
+          return;
+        }
+        
+        try {
+          // Increase search radius to 200km to find more markets
+          const locationResult = await locationService.getNearbyMarkets(10, 200);
+          
+          if (locationResult.success && locationResult.markets.length > 0) {
+            // Check if first market is within reasonable distance (< 30km)
+            const nearestMarket = locationResult.markets[0];
+            const isVeryClose = !nearestMarket.distance || nearestMarket.distance < 30;
+            
+            if (isVeryClose) {
+              // Market is very close - use it automatically
+              intent.location.market = nearestMarket.market;
+              intent.location.district = nearestMarket.district;
+              intent.location.state = nearestMarket.state;
+              console.log('Using nearest market from user location:', nearestMarket);
+            } else {
+              // Markets found but not very close - show suggestions
+              console.log('Found', locationResult.markets.length, 'markets. Nearest is', nearestMarket.distance, 'km away - showing suggestions');
+              
+              const suggestionMessage = {
+                id: Date.now() + 1,
+                type: 'bot',
+                text: queryLanguage === 'hi'
+                  ? `आपके स्थान से निकटतम बाजार ${nearestMarket.distance ? nearestMarket.distance + ' किमी' : 'कुछ दूरी पर'} है। बाजार चुनें:`
+                  : `Nearest market is ${nearestMarket.distance ? nearestMarket.distance + ' km' : 'some distance'} away. Select a market:`,
+                timestamp: new Date(),
+                language: queryLanguage,
+                locationBasedSuggestions: {
+                  markets: locationResult.markets,
+                  userLocation: locationResult.userLocation,
+                  type: 'nearby'
+                }
+              };
+              
+              setMessages(prev => [...prev, suggestionMessage]);
+              setIsLoading(false);
+              return;
+            }
+          } else {
+            // No nearby markets found at all - show suggestions
+            console.log('No nearby markets found, asking user to specify location');
+            
+            const noMarketsMessage = {
+              id: Date.now() + 1,
+              type: 'bot',
+              text: queryLanguage === 'hi'
+                ? 'आपके स्थान के पास कोई बाजार नहीं मिला। कृपया बाजार का नाम बताएं।'
+                : 'No markets found near your location. Please specify a market name.',
+              timestamp: new Date(),
+              language: queryLanguage
+            };
+            
+            setMessages(prev => [...prev, noMarketsMessage]);
+            setIsLoading(false);
+            return;
+          }
+        } catch (err) {
+          console.log('Could not get user location:', err.message);
+          
+          // Show error and ask for location
+          const errorMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: queryLanguage === 'hi'
+              ? 'स्थान प्राप्त नहीं हो सका। कृपया बाजार का नाम बताएं।'
+              : 'Could not get your location. Please specify a market name.',
+            timestamp: new Date(),
+            language: queryLanguage
+          };
+          
+          setMessages(prev => [...prev, errorMessage]);
+          setIsLoading(false);
+          return;
+        }
+      }
 
       // Get district variations (handles reorganized districts)
       let districtVariations = null;
@@ -903,32 +1104,135 @@ function App() {
           } else {
             // No historical data available anywhere (Supabase + API)
             // Check if we should show market suggestions
-            console.log('No historical data found anywhere. Checking for market suggestions...');
+            console.log('No historical data found anywhere. Checking for enhanced suggestions...');
             
             const location = intent.location.market || intent.location.district || intent.location.state;
             let marketSuggestions = null;
+            let locationBasedSuggestions = null;
             
-            // Get suggestions if market was specified
-            if (intent.location.market && intent.location.district && intent.location.state) {
-              const suggestionResult = await marketSuggestionService.getMarketSuggestions({
-                market: intent.location.market,
-                district: intent.location.district,
-                state: intent.location.state
-              }, 5);
-              
-              if (suggestionResult.success && suggestionResult.suggestions.length > 0) {
-                marketSuggestions = {
-                  suggestions: suggestionResult.suggestions,
-                  originalMarket: suggestionResult.originalMarket,
-                  type: 'spelling'
-                };
-                console.log(`Found ${suggestionResult.suggestions.length} market suggestions`);
+            // Only get location-based suggestions if NO location was specified in the query
+            // If user asked for a specific market/district, don't use their current location
+            if (!intent.location.market && !intent.location.district && !intent.location.state) {
+              try {
+                const locationResult = await locationService.getNearbyMarkets(5);
+                if (locationResult.success && locationResult.markets.length > 0) {
+                  locationBasedSuggestions = {
+                    markets: locationResult.markets,
+                    userLocation: locationResult.userLocation,
+                    type: 'nearby'
+                  };
+                  console.log(`Found ${locationResult.markets.length} nearby markets based on user location`);
+                }
+              } catch (err) {
+                console.log('Location-based suggestions not available:', err.message);
               }
             }
             
-            const noDataMessage = queryLanguage === 'hi'
-              ? `क्षमा करें, ${location} में ${intent.commodity || 'डेटा'} उपलब्ध नहीं है।${marketSuggestions ? '\n\nक्या आपका मतलब इनमें से किसी एक से था?' : ''}`
-              : `Sorry, ${intent.commodity || 'data'} ${intent.commodity ? 'prices are' : 'is'} not available for ${location}.${marketSuggestions ? '\n\nDid you mean one of these?' : ''}`;
+            // Get suggestions from master tables if market was specified
+            if (intent.location.market) {
+              // First check if market name needs correction using master table
+              const marketValidation = await masterTableService.validateMarket(
+                intent.location.market,
+                intent.location.state,
+                intent.location.district
+              );
+              
+              if (!marketValidation.exactMatch && marketValidation.suggestions.length > 0) {
+                marketSuggestions = {
+                  suggestions: marketValidation.suggestions.map(m => ({
+                    market: m.market,
+                    district: m.district,
+                    state: m.state,
+                    similarity: m.similarity
+                  })),
+                  originalMarket: intent.location.market,
+                  type: 'spelling'
+                };
+                console.log(`Found ${marketValidation.suggestions.length} market suggestions from master table`);
+              }
+            }
+            
+            // If no spelling suggestions, get geographically nearby markets
+            if (!marketSuggestions && !locationBasedSuggestions && intent.location.market) {
+              try {
+                // Try to get coordinates for the specified market location
+                // Call backend geocoding API to get nearby markets
+                const response = await fetch(
+                  `${import.meta.env.VITE_BACKEND_URL || 'http://localhost:3001'}/api/master/markets/nearest?` +
+                  `market=${encodeURIComponent(intent.location.market)}&` +
+                  `district=${encodeURIComponent(intent.location.district || '')}&` +
+                  `state=${encodeURIComponent(intent.location.state || '')}&` +
+                  `limit=5`
+                );
+                
+                if (response.ok) {
+                  const data = await response.json();
+                  if (data.success && data.data && data.data.length > 0) {
+                    marketSuggestions = {
+                      suggestions: data.data.map(m => ({
+                        market: m.market,
+                        district: m.district,
+                        state: m.state,
+                        distance: m.distance,
+                        distanceText: m.distanceText
+                      })),
+                      originalMarket: intent.location.market,
+                      type: 'geographically_nearby'
+                    };
+                    console.log(`Found ${data.data.length} geographically nearby markets`);
+                  }
+                }
+              } catch (err) {
+                console.log('Could not get geographic suggestions:', err);
+              }
+            }
+            
+            // Fallback: If still no suggestions, get district-based nearby markets
+            if (!marketSuggestions && !locationBasedSuggestions && intent.location.district && intent.location.state) {
+              const nearbyMarkets = await masterTableService.getNearbyMarkets(
+                intent.location.district,
+                intent.location.state,
+                5
+              );
+              
+              if (nearbyMarkets.length > 0) {
+                marketSuggestions = {
+                  suggestions: nearbyMarkets.map(m => ({
+                    market: m.market,
+                    district: m.district,
+                    state: m.state
+                  })),
+                  originalMarket: intent.location.market,
+                  type: 'district_based'
+                };
+                console.log(`Found ${nearbyMarkets.length} district-based nearby markets`);
+              }
+            }
+            
+            // Build enhanced message with suggestions
+            let noDataMessage = queryLanguage === 'hi'
+              ? `क्षमा करें, ${location} में ${intent.commodity || 'डेटा'} उपलब्ध नहीं है।`
+              : `Sorry, ${intent.commodity || 'data'} ${intent.commodity ? 'prices are' : 'is'} not available for ${location}.`;
+            
+            // Add location-based suggestions
+            if (locationBasedSuggestions) {
+              noDataMessage += queryLanguage === 'hi'
+                ? `\n\n📍 आपकी लोकेशन (${locationBasedSuggestions.userLocation.city || locationBasedSuggestions.userLocation.district}) के पास के बाज़ार:`
+                : `\n\n📍 Markets near your location (${locationBasedSuggestions.userLocation.city || locationBasedSuggestions.userLocation.district}):`;
+            }
+            
+            // Add spelling/nearby suggestions
+            if (marketSuggestions) {
+              if (marketSuggestions.type === 'spelling') {
+                noDataMessage += queryLanguage === 'hi'
+                  ? '\n\n🔍 क्या आपका मतलब इनमें से किसी बाज़ार से था?'
+                  : '\n\n🔍 Did you mean one of these markets?';
+              } else {
+                noDataMessage += queryLanguage === 'hi'
+                  ? '\n\n📍 नज़दीकी बाज़ार जहाँ डेटा उपलब्ध हो सकता है:'
+                  : '\n\n📍 Nearby markets where data might be available:';
+              }
+            }
             
             const botMessage = {
               id: Date.now() + 2,
@@ -936,7 +1240,9 @@ function App() {
               text: noDataMessage,
               timestamp: new Date(),
               language: queryLanguage,
-              marketSuggestions: marketSuggestions
+              marketSuggestions: marketSuggestions,
+              locationBasedSuggestions: locationBasedSuggestions,
+              showLocationRequest: !locationBasedSuggestions && !locationService.hasLocationPermission()
             };
 
             setMessages(prev => [...prev, botMessage]);
@@ -1014,11 +1320,149 @@ function App() {
   const handleMarketSelection = async (suggestion) => {
     console.log('User selected market:', suggestion);
     
-    // Create a query with the selected market
-    const query = `${suggestion.market} market prices`;
+    // Create a user message showing what they selected
+    const userMessage = {
+      id: Date.now(),
+      type: 'user',
+      text: `${suggestion.market} market prices`,
+      timestamp: new Date(),
+      isVoice: false,
+      language: 'en'
+    };
     
-    // Send as a new message
-    await handleSendMessage(query, false, null);
+    setMessages(prev => [...prev, userMessage]);
+    setIsLoading(true);
+    setError('');
+    
+    try {
+      // Directly construct the intent instead of asking Gemini again
+      const intent = {
+        commodity: null,
+        location: {
+          market: suggestion.market,
+          district: suggestion.district,
+          state: suggestion.state
+        },
+        date: null,
+        queryType: 'market_overview',
+        needsDisambiguation: false,
+        isHistoricalQuery: false,
+        isDistrictQuery: false
+      };
+      
+      console.log('Constructed intent from suggestion:', intent);
+      
+      // Get district variations (handles reorganized districts)
+      let districtVariations = null;
+      if (intent.location.district && intent.location.state) {
+        districtVariations = await geminiService.getDistrictVariations(
+          intent.location.district,
+          intent.location.state
+        );
+      }
+      
+      // Fetch market prices
+      const queryParams = {
+        state: intent.location.state,
+        district: intent.location.district,
+        market: intent.location.market,
+        limit: 100
+      };
+      
+      console.log('Query parameters for API:', JSON.stringify(queryParams, null, 2));
+      
+      // Try database first, then API (same as main handleSendMessage logic)
+      console.log('🔍 Trying database first...');
+      let response = await marketPriceDB.getMarketPrices(queryParams);
+      
+      // If no data in DB, fallback to API with cache
+      if (!response.success || response.data.length === 0) {
+        console.log('📡 No data in DB, fetching from API...');
+        response = await marketPriceCache.fetchMarketPricesWithCache(
+          queryParams,
+          districtVariations
+        );
+      }
+      
+      console.log('API response:', response.success ? `${response.data.length} records found` : 'No data');
+      
+      if (response.success && response.data.length > 0) {
+        // Format data
+        let formattedData = marketPriceAPI.formatPriceData(response.data);
+        
+        // Get unique latest prices per commodity
+        const latestPrices = new Map();
+        formattedData.forEach(item => {
+          const key = `${item.commodity}-${item.market}-${item.variety}`.toLowerCase();
+          if (!latestPrices.has(key)) {
+            latestPrices.set(key, item);
+          } else {
+            // Keep the one with latest date
+            const existing = latestPrices.get(key);
+            const existingDate = new Date(existing.arrivalDate.split(/[\/\-]/).reverse().join('-'));
+            const currentDate = new Date(item.arrivalDate.split(/[\/\-]/).reverse().join('-'));
+            if (currentDate > existingDate) {
+              latestPrices.set(key, item);
+            }
+          }
+        });
+        
+        formattedData = Array.from(latestPrices.values());
+        
+        // Sort by arrival quantity (trading volume)
+        formattedData.sort((a, b) => {
+          const quantityA = a.arrivalQuantity || 0;
+          const quantityB = b.arrivalQuantity || 0;
+          const hasDataA = quantityA > 0;
+          const hasDataB = quantityB > 0;
+          
+          if (hasDataA && !hasDataB) return -1;
+          if (!hasDataA && hasDataB) return 1;
+          return quantityB - quantityA;
+        });
+        
+        // Generate response
+        const responseText = `Here are the latest prices from ${suggestion.market} market, ${suggestion.district}:`;
+        
+        // Create bot message with market prices
+        const botMessage = {
+          id: Date.now() + 1,
+          type: 'bot',
+          text: responseText,
+          timestamp: new Date(),
+          language: 'en',
+          priceData: formattedData.slice(0, 100), // Limit to 100 items
+          fullPriceData: formattedData, // Full data for image generation
+          isMarketOverview: true,
+          queryType: 'market_overview',
+          location: intent.location,
+          marketInfo: {
+            market: suggestion.market,
+            district: suggestion.district,
+            state: suggestion.state
+          }
+        };
+        
+        setMessages(prev => [...prev, botMessage]);
+      } else {
+        // No data found - try to show nearby market suggestions
+        const noDataMessage = {
+          id: Date.now() + 1,
+          type: 'bot',
+          text: `Sorry, I couldn't find recent price data for ${suggestion.market} market in ${suggestion.district}, ${suggestion.state}. This market may not have reported prices recently.`,
+          timestamp: new Date(),
+          language: 'en'
+        };
+        
+        setMessages(prev => [...prev, noDataMessage]);
+      }
+      
+    } catch (error) {
+      console.error('Error handling market selection:', error);
+      setError('Failed to fetch market prices. Please try again.');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -1032,6 +1476,24 @@ function App() {
                 <TrendingUp className="w-4 h-4 text-white" />
               </div>
               <h1 className="text-base font-semibold text-gray-900">AgriGuru</h1>
+              
+              {/* Location Indicator */}
+              {locationStatus === 'enabled' && userLocation && (
+                <div className="hidden sm:flex items-center gap-1 text-xs text-gray-600 ml-2 px-2 py-1 bg-green-50 rounded-md border border-green-200">
+                  <MapPin className="w-3 h-3 text-green-600" />
+                  <span className="font-medium">{userLocation.district || userLocation.city || 'Location enabled'}</span>
+                </div>
+              )}
+              {locationStatus === 'disabled' && (
+                <button
+                  onClick={checkLocationStatus}
+                  className="hidden sm:flex items-center gap-1 text-xs text-gray-500 ml-2 px-2 py-1 bg-gray-50 rounded-md border border-gray-200 hover:bg-gray-100 transition-colors"
+                  title="Click to enable location for nearby market prices"
+                >
+                  <MapPin className="w-3 h-3" />
+                  <span>Enable location</span>
+                </button>
+              )}
             </div>
             <div className="flex items-center gap-0.5">
               <button

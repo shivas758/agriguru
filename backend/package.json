@@ -7,9 +7,15 @@
   "scripts": {
     "start": "node server.js",
     "dev": "nodemon server.js",
+    "server": "node server.js",
     "bulk-import": "node scripts/bulkImport.js",
     "daily-sync": "node scripts/dailySync.js",
     "verify": "node scripts/verifyData.js",
+    "cleanup": "node scripts/cleanupOldData.js",
+    "storage:stats": "node scripts/cleanupOldData.js --stats",
+    "sync:masters": "node scripts/populateMasters.js",
+    "sync:masters:db": "node scripts/syncMastersFromDB.js",
+    "test:masters": "node ../test-master-tables.js",
     "pm2:start": "pm2 start ecosystem.config.cjs",
     "pm2:stop": "pm2 stop agriguru-sync",
     "pm2:restart": "pm2 restart agriguru-sync",
@@ -24,12 +30,17 @@
   ],
   "author": "",
   "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=9.0.0"
+  },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
     "axios": "^1.6.2",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "express": "^4.18.2",
+    "node-cache": "^5.1.2",
     "node-cron": "^3.0.3",
     "winston": "^3.11.0"
   },

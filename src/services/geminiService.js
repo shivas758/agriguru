@@ -1,6 +1,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import marketPriceCache from './marketPriceCache';
 import { getCropAliases } from '../config/cropAliases';
+import masterTableService from './masterTableService';
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
@@ -33,6 +34,57 @@ class GeminiService {
       console.warn('Gemini API key not found. Language processing features will be limited.');
       this.model = null;
     }
+  }
+
+  /**
+   * Validate query against master tables
+   * This now validates the actual extracted intent, not individual words
+   */
+  async validateWithMasterTables(intent) {
+    const validationResult = {
+      commodity: null,
+      market: null,
+      commoditySuggestions: [],
+      marketSuggestions: [],
+      needsClarification: false
+    };
+    
+    // Only validate if we have something to validate
+    if (intent.commodity) {
+      const commodityValidation = await masterTableService.validateCommodity(intent.commodity);
+      if (commodityValidation.exactMatch) {
+        validationResult.commodity = commodityValidation.commodity;
+      } else if (!commodityValidation.error && commodityValidation.suggestions && commodityValidation.suggestions.length > 0) {
+        // Only suggest if similarity is high enough (> 0.7)
+        const highQualitySuggestions = commodityValidation.suggestions.filter(s => s.similarity > 0.7);
+        if (highQualitySuggestions.length > 0) {
+          validationResult.commoditySuggestions = highQualitySuggestions;
+          validationResult.needsClarification = true;
+        }
+      }
+    }
+    
+    // Only validate market if one was specified
+    if (intent.location && intent.location.market) {
+      const marketValidation = await masterTableService.validateMarket(
+        intent.location.market, 
+        intent.location.state, 
+        intent.location.district
+      );
+      
+      if (marketValidation.exactMatch) {
+        validationResult.market = marketValidation.market;
+      } else if (!marketValidation.error && marketValidation.suggestions && marketValidation.suggestions.length > 0) {
+        // Only suggest if similarity is high enough (> 0.7) 
+        const highQualitySuggestions = marketValidation.suggestions.filter(s => s.similarity > 0.7);
+        if (highQualitySuggestions.length > 0) {
+          validationResult.marketSuggestions = highQualitySuggestions;
+          validationResult.needsClarification = true;
+        }
+      }
+    }
+    
+    return validationResult;
   }
 
   async detectLanguage(text) {
@@ -139,11 +191,18 @@ class GeminiService {
     }
 
     try {
+      // First, let Gemini extract the intent
       const prompt = `
 You are an agricultural assistant for India. Your primary role is market prices, but you can also answer general agriculture questions.
 
 Query: "${query}"
 Language: ${language}
+
+IMPORTANT PARSING RULES:
+- "near me" means user wants nearby markets based on their location - DO NOT treat "near" as a market name
+- "market prices of X" means X is the market name, same as "X market prices"
+- "market prices" without any location means user wants local market prices based on their location
+- If no specific market is mentioned, set market as null
 
 FIRST, categorize the query into ONE of these categories:
 1. "weather" - Questions about weather, climate, rainfall, temperature, forecast (today, tomorrow, this week, etc.)
@@ -301,6 +360,32 @@ JSON:`;
       if (jsonMatch) {
         const intent = JSON.parse(jsonMatch[0]);
         
+        // Now validate the extracted intent against master tables
+        const validationResult = await this.validateWithMasterTables(intent);
+        
+        // Enhance intent with validation results
+        if (validationResult.needsClarification) {
+          intent.needsDisambiguation = true;
+          intent.suggestions = {
+            commodities: validationResult.commoditySuggestions,
+            markets: validationResult.marketSuggestions
+          };
+        }
+        
+        // Use validated values if available (for exact matches)
+        if (validationResult.commodity) {
+          intent.commodity = validationResult.commodity.commodity_name;
+          intent.commodityValidated = true;
+        }
+        
+        if (validationResult.market) {
+          // Only override if it's a valid exact match
+          intent.location.market = validationResult.market.market;
+          intent.location.district = validationResult.market.district;
+          intent.location.state = validationResult.market.state;
+          intent.marketValidated = true;
+        }
+        
         // Apply crop aliases to expand search
         if (intent.commodity) {
           const aliases = getCropAliases(intent.commodity);
@@ -308,8 +393,16 @@ JSON:`;
           console.log(`🌾 Crop aliases for "${intent.commodity}":`, aliases);
         }
         
+        // Track the query for analytics
+        await masterTableService.trackQuery(
+          intent.commodity,
+          intent.location.market,
+          intent.location.state,
+          intent.location.district
+        );
+        
         // DEBUG: Commented for production
-        console.log('Parsed intent from Gemini:', intent);
+        console.log('Parsed intent from Gemini with validation:', intent);
         return intent;
       }
       
