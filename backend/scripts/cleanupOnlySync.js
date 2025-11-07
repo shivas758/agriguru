@@ -12,7 +12,6 @@
 import dataRetentionService from '../services/dataRetentionService.js';
 import { logger } from '../utils/logger.js';
 import { testConnection } from '../services/supabaseClient.js';
-import { syncMasters } from './syncMastersFromDB.js';
 
 export async function dailyCleanup() {
   const startTime = Date.now();
@@ -44,15 +43,8 @@ export async function dailyCleanup() {
       logger.warn('⚠️ Cleanup had issues');
     }
 
-    // Step 2: Sync master tables (markets, commodities)
-    logger.info('');
-    logger.info('Step 2: Syncing master tables...');
-    try {
-      await syncMasters();
-      logger.info('✅ Master tables synced');
-    } catch (error) {
-      logger.warn('⚠️ Master sync failed (non-critical):', error.message);
-    }
+    // Note: Master table sync can be run separately if needed
+    // via: node scripts/syncMastersFromDB.js
 
     const duration = ((Date.now() - startTime) / 1000).toFixed(2);
     
