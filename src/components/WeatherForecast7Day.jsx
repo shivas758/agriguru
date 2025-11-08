@@ -1,5 +1,5 @@
 import React from 'react';
-import { CloudRain, Droplets, Calendar, Wind, Thermometer, Sun, Cloud, CloudDrizzle } from 'lucide-react';
+import { CloudRain, Droplets, Calendar, Wind, Thermometer, Sun, Cloud, CloudDrizzle, CloudSnow, CloudFog, Zap, Eye } from 'lucide-react';
 
 const WeatherForecast7Day = ({ forecastData, location, numberOfDays = 7 }) => {
   // Parse the forecast data from Gemini response
@@ -93,6 +93,38 @@ const WeatherForecast7Day = ({ forecastData, location, numberOfDays = 7 }) => {
   const outlook = getWeekOutlook(avgRainfall);
   const OutlookIcon = outlook.icon;
   
+  // Get weather icon based on condition and rainfall
+  const getWeatherIcon = (rainfallChance, condition) => {
+    const chance = rainfallChance || 0;
+    const conditionLower = (condition || '').toLowerCase();
+    
+    // Check specific conditions first
+    if (conditionLower.includes('thunder') || conditionLower.includes('storm')) {
+      return { icon: Zap, color: 'text-purple-600', bg: 'bg-purple-50' };
+    }
+    if (conditionLower.includes('fog') || conditionLower.includes('mist')) {
+      return { icon: CloudFog, color: 'text-gray-500', bg: 'bg-gray-50' };
+    }
+    if (conditionLower.includes('snow')) {
+      return { icon: CloudSnow, color: 'text-blue-300', bg: 'bg-blue-50' };
+    }
+    
+    // Use rainfall chance for general conditions
+    if (chance >= 70) {
+      return { icon: CloudRain, color: 'text-blue-700', bg: 'bg-blue-100' };
+    }
+    if (chance >= 50) {
+      return { icon: CloudDrizzle, color: 'text-blue-600', bg: 'bg-blue-50' };
+    }
+    if (chance >= 30) {
+      return { icon: Cloud, color: 'text-gray-600', bg: 'bg-gray-50' };
+    }
+    if (chance >= 10) {
+      return { icon: Cloud, color: 'text-gray-500', bg: 'bg-gray-50' };
+    }
+    return { icon: Sun, color: 'text-yellow-500', bg: 'bg-yellow-50' };
+  };
+  
   // Get rainfall category color for each day
   const getRainfallColor = (chance) => {
     if (!chance && chance !== 0) return 'bg-gray-300';
@@ -141,87 +173,116 @@ const WeatherForecast7Day = ({ forecastData, location, numberOfDays = 7 }) => {
       </div>
 
       {/* Daily Forecast Cards */}
-      <div className="space-y-2 mb-4">
-        {days.map((day, index) => (
-          <div 
-            key={index}
-            className={`rounded-lg p-3 border transition-all hover:shadow-md ${
-              index === 0 
-                ? 'bg-blue-50 border-blue-300 ring-2 ring-blue-200' 
-                : 'bg-gray-50 border-gray-200'
-            }`}
-          >
-            <div className="flex items-center gap-3">
-              {/* Date Info */}
-              <div className="flex flex-col items-center min-w-[60px]">
-                <span className={`text-xs font-semibold ${index === 0 ? 'text-blue-700' : 'text-gray-700'}`}>
-                  {index === 0 ? 'Today' : day.dayName}
-                </span>
-                <span className="text-xs text-gray-600">{day.dateStr}</span>
-              </div>
-              
-              {/* Rainfall Bar Chart */}
-              <div className="flex-1">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1">
-                    <div className="w-full bg-gray-200 rounded-full h-6 overflow-hidden">
-                      <div 
-                        className={`${getRainfallColor(day.rainfallChance)} h-6 rounded-full transition-all duration-500 flex items-center justify-center`}
-                        style={{ width: `${day.rainfallChance || 0}%` }}
-                      >
-                        {day.rainfallChance > 15 && (
-                          <span className="text-xs font-semibold text-white px-1">
-                            {day.rainfallChance}%
-                          </span>
-                        )}
-                      </div>
-                    </div>
+      <div className="space-y-3 mb-4">
+        {days.map((day, index) => {
+          const weatherIcon = getWeatherIcon(day.rainfallChance, day.condition);
+          const WeatherIconComponent = weatherIcon.icon;
+          
+          return (
+            <div 
+              key={index}
+              className={`rounded-xl p-4 border-2 transition-all hover:shadow-lg ${
+                index === 0 
+                  ? 'bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-300 ring-2 ring-blue-200 shadow-md' 
+                  : 'bg-white border-gray-200 hover:border-blue-200'
+              }`}
+            >
+              {/* Top Row: Date and Weather Icon */}
+              <div className="flex items-center justify-between mb-3">
+                <div className="flex items-center gap-3">
+                  {/* Large Weather Icon */}
+                  <div className={`${weatherIcon.bg} rounded-xl p-3 border-2 ${
+                    index === 0 ? 'border-blue-200' : 'border-gray-200'
+                  }`}>
+                    <WeatherIconComponent className={`w-8 h-8 ${weatherIcon.color}`} />
                   </div>
-                  {day.rainfallChance <= 15 && (
-                    <span className={`text-xs font-semibold ${getRainfallTextColor(day.rainfallChance)} min-w-[35px] text-right`}>
+                  
+                  {/* Date Info */}
+                  <div>
+                    <span className={`text-sm font-bold ${
+                      index === 0 ? 'text-blue-700' : 'text-gray-800'
+                    }`}>
+                      {index === 0 ? 'Today' : day.dayName}
+                    </span>
+                    <p className="text-xs text-gray-600">{day.dateStr}</p>
+                  </div>
+                </div>
+                
+                {/* Rainfall Percentage Badge */}
+                <div className={`px-3 py-1.5 rounded-full ${
+                  (day.rainfallChance || 0) >= 50 ? 'bg-blue-600' : 'bg-blue-100'
+                }`}>
+                  <div className="flex items-center gap-1">
+                    <Droplets className={`w-3.5 h-3.5 ${
+                      (day.rainfallChance || 0) >= 50 ? 'text-white' : 'text-blue-700'
+                    }`} />
+                    <span className={`text-xs font-bold ${
+                      (day.rainfallChance || 0) >= 50 ? 'text-white' : 'text-blue-700'
+                    }`}>
                       {day.rainfallChance || 0}%
                     </span>
-                  )}
+                  </div>
                 </div>
               </div>
               
-              {/* Rain Icon Indicator */}
-              <div className="min-w-[24px] flex justify-center">
-                {(day.rainfallChance || 0) >= 50 ? (
-                  <CloudRain className="w-5 h-5 text-blue-600" />
-                ) : (day.rainfallChance || 0) >= 20 ? (
-                  <Droplets className="w-5 h-5 text-blue-400" />
-                ) : (
-                  <Sun className="w-5 h-5 text-gray-400" />
-                )}
+              {/* Weather Condition Text */}
+              {day.condition && (
+                <div className="mb-3">
+                  <p className="text-sm text-gray-700 font-medium">{day.condition}</p>
+                </div>
+              )}
+              
+              {/* Rainfall Bar */}
+              <div className="mb-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs text-gray-600 font-medium">Rain Probability</span>
+                </div>
+                <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
+                  <div 
+                    className={`${getRainfallColor(day.rainfallChance)} h-3 rounded-full transition-all duration-700 ease-out`}
+                    style={{ width: `${day.rainfallChance || 0}%` }}
+                  />
+                </div>
+              </div>
+              
+              {/* Weather Details Grid */}
+              <div className="grid grid-cols-3 gap-2">
+                {/* Temperature */}
+                <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-lg p-2 border border-orange-200">
+                  <div className="flex flex-col items-center">
+                    <Thermometer className="w-4 h-4 text-orange-600 mb-1" />
+                    <span className="text-xs font-semibold text-gray-700">
+                      {day.temperature || 'N/A'}
+                    </span>
+                    <span className="text-[10px] text-gray-500">Temp</span>
+                  </div>
+                </div>
+                
+                {/* Humidity */}
+                <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-2 border border-blue-200">
+                  <div className="flex flex-col items-center">
+                    <Droplets className="w-4 h-4 text-blue-600 mb-1" />
+                    <span className="text-xs font-semibold text-gray-700">
+                      {day.humidity ? `${day.humidity}%` : 'N/A'}
+                    </span>
+                    <span className="text-[10px] text-gray-500">Humidity</span>
+                  </div>
+                </div>
+                
+                {/* Wind Speed */}
+                <div className="bg-gradient-to-br from-gray-50 to-slate-50 rounded-lg p-2 border border-gray-200">
+                  <div className="flex flex-col items-center">
+                    <Wind className="w-4 h-4 text-gray-600 mb-1" />
+                    <span className="text-xs font-semibold text-gray-700">
+                      {day.windSpeed ? `${day.windSpeed}` : 'N/A'}
+                    </span>
+                    <span className="text-[10px] text-gray-500">Wind</span>
+                  </div>
+                </div>
               </div>
             </div>
-            
-            {/* Additional weather info if available */}
-            {(day.temperature || day.humidity || day.windSpeed) && (
-              <div className="flex items-center gap-3 mt-2 text-xs text-gray-600 border-t border-gray-300 pt-2">
-                {day.temperature && (
-                  <div className="flex items-center gap-1">
-                    <Thermometer className="w-3.5 h-3.5" />
-                    <span>{day.temperature}°C</span>
-                  </div>
-                )}
-                {day.humidity && (
-                  <div className="flex items-center gap-1">
-                    <Droplets className="w-3.5 h-3.5" />
-                    <span>{day.humidity}%</span>
-                  </div>
-                )}
-                {day.windSpeed && (
-                  <div className="flex items-center gap-1">
-                    <Wind className="w-3.5 h-3.5" />
-                    <span>{day.windSpeed} km/h</span>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {/* Rainfall Summary Chart */}

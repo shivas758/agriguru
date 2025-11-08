@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import marketPriceCache from './marketPriceCache';
 import { getCropAliases } from '../config/cropAliases';
 import masterTableService from './masterTableService';
+import weatherApiService from './weatherApiService';
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || '';
 
@@ -224,11 +225,18 @@ FOR WEATHER QUERIES:
     "state": null,
     "city": "city name if mentioned, null otherwise"
   },
-  "date": null,
+  "date": "today" (current weather), "tomorrow" (next day), or null (default to current),
   "needsDisambiguation": false,
   "is7DayForecast": true if asking about multiple days/week/next X days (where X > 1), false otherwise,
-  "numberOfDays": number of days requested (1-7). Extract from "next 3 days", "next 5 days", "this week" (7), etc. Default to 7 if asking for "week" or "7 days"
+  "numberOfDays": number of days requested (1-7). Extract from "next 3 days", "next 5 days", "this week" (7), etc. Default to 1 for single day queries
 }
+
+CRITICAL WEATHER DATE PARSING:
+- "weather today" / "current weather" / "climate" → date: "today", is7DayForecast: false, numberOfDays: 1
+- "weather tomorrow" / "tomorrow's weather" → date: "tomorrow", is7DayForecast: false, numberOfDays: 1
+- "next 3 days" / "next 5 days" → date: "today", is7DayForecast: true, numberOfDays: 3 or 5
+- "this week" / "week forecast" / "7 days" → date: "today", is7DayForecast: true, numberOfDays: 7
+- No time reference (e.g., "weather in Adoni") → date: "today", is7DayForecast: false, numberOfDays: 1
 
 FOR NON-AGRICULTURE QUERIES:
 {
@@ -294,15 +302,17 @@ CRITICAL MARKET vs DISTRICT vs STATE DISAMBIGUATION:
 - When isStateQuery=true, set market=null and district=null, only populate state
 
 EXAMPLES:
-- "What's the weather like in Adoni?" → queryType: "weather", city: "Adoni", district: "Kurnool", state: "Andhra Pradesh", is7DayForecast: false, numberOfDays: 1
-- "Will it rain tomorrow in Kurnool?" → queryType: "weather", city: "Kurnool", district: "Kurnool", state: "Andhra Pradesh", is7DayForecast: false, numberOfDays: 1
-- "How's the weather gonna be tomorrow in Hyderabad?" → queryType: "weather", city: "Hyderabad", state: "Telangana", is7DayForecast: false, numberOfDays: 1
-- "What's the weather forecast for next week in Bangalore?" → queryType: "weather", city: "Bangalore", district: "Bangalore Urban", state: "Karnataka", is7DayForecast: true, numberOfDays: 7
-- "Show me 7 day weather in Mumbai" → queryType: "weather", city: "Mumbai", state: "Maharashtra", is7DayForecast: true, numberOfDays: 7
-- "How's the weather this week in Delhi?" → queryType: "weather", city: "Delhi", state: "Delhi", is7DayForecast: true, numberOfDays: 7
-- "Weather forecast for next 3 days in Pune" → queryType: "weather", city: "Pune", state: "Maharashtra", is7DayForecast: true, numberOfDays: 3
-- "Show me 5 day weather in Chennai" → queryType: "weather", city: "Chennai", state: "Tamil Nadu", is7DayForecast: true, numberOfDays: 5
-- "How's the weather for next 2 days in Jaipur?" → queryType: "weather", city: "Jaipur", state: "Rajasthan", is7DayForecast: true, numberOfDays: 2
+- "What's the weather like in Adoni?" → queryType: "weather", city: "Adoni", district: "Kurnool", state: "Andhra Pradesh", date: "today", is7DayForecast: false, numberOfDays: 1
+- "climate in Adoni" → queryType: "weather", city: "Adoni", district: "Kurnool", state: "Andhra Pradesh", date: "today", is7DayForecast: false, numberOfDays: 1
+- "weather in Adoni tomorrow" → queryType: "weather", city: "Adoni", district: "Kurnool", state: "Andhra Pradesh", date: "tomorrow", is7DayForecast: false, numberOfDays: 1
+- "Will it rain tomorrow in Kurnool?" → queryType: "weather", city: "Kurnool", district: "Kurnool", state: "Andhra Pradesh", date: "tomorrow", is7DayForecast: false, numberOfDays: 1
+- "How's the weather gonna be tomorrow in Hyderabad?" → queryType: "weather", city: "Hyderabad", state: "Telangana", date: "tomorrow", is7DayForecast: false, numberOfDays: 1
+- "What's the weather forecast for next week in Bangalore?" → queryType: "weather", city: "Bangalore", district: "Bangalore Urban", state: "Karnataka", date: "today", is7DayForecast: true, numberOfDays: 7
+- "Show me 7 day weather in Mumbai" → queryType: "weather", city: "Mumbai", state: "Maharashtra", date: "today", is7DayForecast: true, numberOfDays: 7
+- "How's the weather this week in Delhi?" → queryType: "weather", city: "Delhi", state: "Delhi", date: "today", is7DayForecast: true, numberOfDays: 7
+- "Weather forecast for next 3 days in Pune" → queryType: "weather", city: "Pune", state: "Maharashtra", date: "today", is7DayForecast: true, numberOfDays: 3
+- "Show me 5 day weather in Chennai" → queryType: "weather", city: "Chennai", state: "Tamil Nadu", date: "today", is7DayForecast: true, numberOfDays: 5
+- "How's the weather for next 2 days in Jaipur?" → queryType: "weather", city: "Jaipur", state: "Rajasthan", date: "today", is7DayForecast: true, numberOfDays: 2
 - "What is the capital of France?" → queryType: "non_agriculture"
 - "Who won the cricket match?" → queryType: "non_agriculture"
 - "How to control pest in tomato plants?" → queryType: "general_agriculture"
@@ -786,33 +796,7 @@ JSON:`;
   }
 
   async getWeatherInfo(query, location, language = 'en') {
-    if (!this.model) {
-      return {
-        success: false,
-        message: language === 'hi'
-          ? 'क्षमा करें, मौसम की जानकारी अभी उपलब्ध नहीं है।'
-          : 'Sorry, weather information is not available at the moment.'
-      };
-    }
-
     try {
-      const languageNames = {
-        'en': 'English',
-        'hi': 'Hindi',
-        'ta': 'Tamil',
-        'te': 'Telugu',
-        'kn': 'Kannada',
-        'ml': 'Malayalam',
-        'mr': 'Marathi',
-        'gu': 'Gujarati',
-        'pa': 'Punjabi',
-        'bn': 'Bengali',
-        'or': 'Odia',
-        'as': 'Assamese'
-      };
-
-      const targetLang = languageNames[language] || 'English';
-      
       // Determine location string
       const locationStr = location.city || location.district || location.market || location.state || '';
       
@@ -826,35 +810,32 @@ JSON:`;
         };
       }
 
-      const prompt = `
-User asked: "${query}"
-Location: ${locationStr}
-Language: ${targetLang}
+      // Fetch real weather data from OpenWeatherMap API
+      console.log(`🌤️ Fetching real weather data for ${locationStr}...`);
+      const weatherData = await weatherApiService.getCurrentWeather(locationStr, location.state);
+      
+      if (!weatherData.success) {
+        throw new Error(weatherData.error || 'Failed to fetch weather data');
+      }
 
-Provide current weather information for ${locationStr} in ${targetLang}.
-
-IMPORTANT: Structure your response to include these specific details:
-1. Temperature (format: "XX°C" or "XX degrees")
-2. Weather condition (sunny, cloudy, rainy, etc.)
-3. Rainfall chance (format: "XX% chance of rain" or "XX% precipitation")
-4. Wind speed (format: "wind speed XX km/h")
-5. Humidity (format: "humidity XX%")
-6. Brief agricultural advice related to the weather conditions (if applicable)
-
-Example format:
-"Currently 30°C with partly cloudy skies. 40% chance of rain. Wind speed 15 km/h. Humidity 65%. Good conditions for irrigation. Avoid spraying pesticides if rain is expected."
-
-Keep the response concise and in ${targetLang}.
-
-Answer:`;
-
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
+      // Get agricultural advice
+      const advice = weatherApiService.getAgriculturalAdvice(weatherData, language);
+      
+      // Format message based on language
+      let message;
+      if (language === 'hi') {
+        message = `वर्तमान में ${weatherData.temperature}°C तापमान है, ${weatherData.condition.toLowerCase()} मौसम। बारिश की संभावना ${weatherData.rainfallChance}%। हवा की गति ${weatherData.windSpeed} किमी/घंटा। आर्द्रता ${weatherData.humidity}%। \n\n${advice}`;
+      } else {
+        message = `Currently ${weatherData.temperature}°C with ${weatherData.description}. ${weatherData.rainfallChance}% chance of rain. Wind speed ${weatherData.windSpeed} km/h. Humidity ${weatherData.humidity}%. \n\n${advice}`;
+      }
+      
+      console.log('✅ Real weather data fetched successfully');
       
       return {
         success: true,
-        message: response.text().trim(),
-        location: locationStr
+        message: message,
+        location: weatherData.location,
+        weatherData: weatherData // Include raw data for card display
       };
     } catch (error) {
       console.error('Error getting weather information:', error);
@@ -868,35 +849,9 @@ Answer:`;
   }
 
   async get7DayWeatherForecast(query, location, language = 'en', numberOfDays = 7) {
-    if (!this.model) {
-      return {
-        success: false,
-        message: language === 'hi'
-          ? 'क्षमा करें, मौसम पूर्वानुमान अभी उपलब्ध नहीं है।'
-          : 'Sorry, weather forecast is not available at the moment.'
-      };
-    }
-
     try {
-      const languageNames = {
-        'en': 'English',
-        'hi': 'Hindi',
-        'ta': 'Tamil',
-        'te': 'Telugu',
-        'kn': 'Kannada',
-        'ml': 'Malayalam',
-        'mr': 'Marathi',
-        'gu': 'Gujarati',
-        'pa': 'Punjabi',
-        'bn': 'Bengali',
-        'or': 'Odia',
-        'as': 'Assamese'
-      };
-
-      const targetLang = languageNames[language] || 'English';
-      
-      // Ensure numberOfDays is between 1 and 7
-      const days = Math.min(Math.max(numberOfDays, 1), 7);
+      // Ensure numberOfDays is between 1 and 5 (OpenWeatherMap limit)
+      const days = Math.min(Math.max(numberOfDays, 1), 5);
       
       // Determine location string
       const locationStr = location.city || location.district || location.market || location.state || '';
@@ -911,73 +866,36 @@ Answer:`;
         };
       }
 
-      const prompt = `
-User asked: "${query}"
-Location: ${locationStr}
-Language: ${targetLang}
-
-Provide a ${days}-day weather forecast for ${locationStr} in ${targetLang}.
-
-IMPORTANT: Structure your response as a detailed forecast for each of the next ${days} days.
-
-For EACH day (Day 1 through Day ${days}), provide:
-1. Day name (e.g., Monday, Tuesday)
-2. Date (format: "DD Mon")
-3. Temperature (format: "XX°C to YY°C")
-4. Rainfall chance (format: "XX%" - this is CRITICAL for farming decisions)
-5. Weather condition (sunny, cloudy, rainy, partly cloudy, etc.)
-6. Humidity (format: "XX%")
-7. Wind speed (format: "XX km/h")
-
-After the ${days}-day forecast, provide:
-- Overall summary for the period
-- Agricultural recommendations based on the rainfall pattern
-- Best days for specific farming activities (irrigation, spraying, harvesting, etc.)
-
-Example format for each day:
-Day 1 (Today) - 5 Nov
-Temperature: 28°C to 35°C
-Rainfall: 15%
-Condition: Partly cloudy
-Humidity: 65%
-Wind: 12 km/h
-
-Day 2 (Tomorrow) - 6 Nov
-Temperature: 27°C to 34°C
-Rainfall: 40%
-Condition: Cloudy with possible showers
-Humidity: 70%
-Wind: 15 km/h
-
-[Continue for all ${days} days...]
-
-Summary:
-[Summary in ${targetLang}]
-
-Farming Advice:
-[Practical advice based on the weather in ${targetLang}]
-
-Keep the response in ${targetLang} and be specific about rainfall percentages as farmers rely on this for planning.
-
-Answer:`;
-
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const forecastText = response.text().trim();
+      // Fetch real weather forecast from OpenWeatherMap API
+      console.log(`🌤️ Fetching ${days}-day weather forecast for ${locationStr}...`);
+      const forecastData = await weatherApiService.getForecast(locationStr, location.state, days);
       
-      // Parse the response to extract structured data
-      const parsedForecast = this.parse7DayForecast(forecastText, days);
+      if (!forecastData.success) {
+        throw new Error(forecastData.error || 'Failed to fetch weather forecast');
+      }
+
+      // Generate summary message
+      const avgRainfall = forecastData.forecasts.reduce((sum, day) => sum + day.rainfallChance, 0) / forecastData.forecasts.length;
+      
+      let summary;
+      if (language === 'hi') {
+        summary = `${days} दिन का मौसम पूर्वानुमान ${forecastData.location} के लिए। औसत वर्षा संभावना: ${Math.round(avgRainfall)}%।`;
+      } else {
+        summary = `${days}-day weather forecast for ${forecastData.location}. Average rainfall probability: ${Math.round(avgRainfall)}%.`;
+      }
+      
+      console.log('✅ Real weather forecast fetched successfully');
       
       return {
         success: true,
-        message: forecastText,
-        forecastData: parsedForecast,
-        location: locationStr,
+        message: summary,
+        forecastData: forecastData.forecasts,
+        location: forecastData.location,
         is7Day: true,
         numberOfDays: days
       };
     } catch (error) {
-      console.error('Error getting 7-day weather forecast:', error);
+      console.error('Error getting weather forecast:', error);
       return {
         success: false,
         message: language === 'hi'

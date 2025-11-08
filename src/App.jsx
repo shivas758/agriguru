@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Mic, MicOff, Send, Volume2, VolumeX, Settings, 
   Globe, Loader2, AlertCircle, ChevronDown, TrendingUp,
-  Package, MapPin, Info, Bot, User
+  Package, MapPin, Info, Bot, User, StopCircle
 } from 'lucide-react';
 import ChatMessage from './components/ChatMessage';
 import PriceTrendCard from './components/PriceTrendCard';
@@ -28,6 +28,7 @@ function App() {
   const [conversationContext, setConversationContext] = useState(null);
   const [userLocation, setUserLocation] = useState(null);
   const [locationStatus, setLocationStatus] = useState('checking'); // 'checking', 'enabled', 'disabled', 'denied'
+  const abortControllerRef = useRef(null);
   
   const messagesEndRef = useRef(null);
   const chatContainerRef = useRef(null);
@@ -104,6 +105,34 @@ function App() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const handleStopGeneration = () => {
+    // Abort the current request if any
+    if (abortControllerRef.current) {
+      console.log('🛑 User clicked stop - aborting request');
+      abortControllerRef.current.abort();
+    }
+    
+    // Stop loading state
+    setIsLoading(false);
+    
+    // Add a system message indicating generation was stopped
+    const stopMessage = {
+      id: Date.now(),
+      type: 'bot',
+      text: 'Generation stopped by user.',
+      timestamp: new Date(),
+      language: 'en'
+    };
+    
+    setMessages(prev => [...prev, stopMessage]);
+    
+    // Clear any conversation context
+    setConversationContext(null);
+    
+    // Set to null after abort
+    abortControllerRef.current = null;
+  };
+
   const handleSendMessage = async (text, isVoice = false, detectedLanguage = null) => {
     if (!text.trim()) return;
 
@@ -120,6 +149,13 @@ function App() {
     setInputText('');
     setIsLoading(true);
     setError('');
+    
+    // Create new AbortController for this request
+    const abortController = new AbortController();
+    abortControllerRef.current = abortController;
+    
+    // Helper function to check if request was aborted
+    const isAborted = () => abortController.signal.aborted;
 
     try {
       // Detect language if voice input
@@ -162,6 +198,12 @@ function App() {
             );
         
         if (weatherResult.success) {
+          // Check if request was aborted before adding message
+          if (isAborted()) {
+            console.log('🛑 Request aborted, skipping weather message');
+            return;
+          }
+          
           const botMessage = {
             id: Date.now() + 1,
             type: 'bot',
@@ -186,6 +228,12 @@ function App() {
             voiceService.speak(summaryText, queryLanguage);
           }
         } else {
+          // Check if request was aborted before adding message
+          if (isAborted()) {
+            console.log('🛑 Request aborted, skipping error message');
+            return;
+          }
+          
           const botMessage = {
             id: Date.now() + 1,
             type: 'bot',
@@ -278,15 +326,33 @@ function App() {
       if (intent.queryType === 'weather') {
         console.log('Weather query detected, getting weather info...');
         
+        // Use user location if no location specified and user location is available
+        let weatherLocation = intent.location;
+        if (!weatherLocation.city && !weatherLocation.district && !weatherLocation.market && userLocation) {
+          console.log('No location specified, using user location:', userLocation);
+          weatherLocation = {
+            city: userLocation.city || userLocation.district,
+            district: userLocation.district,
+            state: userLocation.state,
+            market: null
+          };
+        }
+        
         // Check if user wants multi-day forecast or single-day weather
         const is7Day = intent.is7DayForecast === true;
         const numberOfDays = intent.numberOfDays || (is7Day ? 7 : 1);
         
         const weatherResult = is7Day 
-          ? await geminiService.get7DayWeatherForecast(text, intent.location, queryLanguage, numberOfDays)
-          : await geminiService.getWeatherInfo(text, intent.location, queryLanguage);
+          ? await geminiService.get7DayWeatherForecast(text, weatherLocation, queryLanguage, numberOfDays)
+          : await geminiService.getWeatherInfo(text, weatherLocation, queryLanguage);
         
         if (weatherResult.needsLocation) {
+          // Check if request was aborted
+          if (isAborted()) {
+            console.log('🛑 Request aborted, skipping location request');
+            return;
+          }
+          
           // Ask user for location and set context
           const botMessage = {
             id: Date.now() + 1,
@@ -311,6 +377,12 @@ function App() {
             voiceService.speak(weatherResult.message, queryLanguage);
           }
         } else if (weatherResult.success) {
+          // Check if request was aborted
+          if (isAborted()) {
+            console.log('🛑 Request aborted, skipping weather success message');
+            return;
+          }
+          
           // Show weather information
           const botMessage = {
             id: Date.now() + 1,
@@ -336,6 +408,12 @@ function App() {
             voiceService.speak(summaryText, queryLanguage);
           }
         } else {
+          // Check if request was aborted
+          if (isAborted()) {
+            console.log('🛑 Request aborted, skipping weather error message');
+            return;
+          }
+          
           // Error getting weather
           const botMessage = {
             id: Date.now() + 1,
@@ -387,6 +465,12 @@ function App() {
         console.log('General agriculture question detected, querying Gemini...');
         
         const answer = await geminiService.answerAgricultureQuestion(text, queryLanguage);
+        
+        // Check if request was aborted
+        if (isAborted()) {
+          console.log('🛑 Request aborted, skipping agriculture answer');
+          return;
+        }
         
         const botMessage = {
           id: Date.now() + 1,
@@ -640,6 +724,12 @@ function App() {
             state: intent.location.state
           };
           
+          // Check if request was aborted
+          if (isAborted()) {
+            console.log('🛑 Request aborted, skipping trend data');
+            return;
+          }
+          
           const botMessage = {
             id: Date.now() + 1,
             type: 'bot',
@@ -681,6 +771,12 @@ function App() {
           const summaryText = queryLanguage === 'hi'
             ? `${marketInfo.market || marketInfo.district} बाजार के ${trendResult.commodities.length} वस्तुओं के लिए कीमत ट्रेंड (पिछले 30 दिन):`
             : `Price trends for ${trendResult.commodities.length} commodities in ${marketInfo.market || marketInfo.district} market (last 30 days):`;
+          
+          // Check if request was aborted
+          if (isAborted()) {
+            console.log('🛑 Request aborted, skipping market-wide trend data');
+            return;
+          }
           
           const botMessage = {
             id: Date.now() + 1,
@@ -1281,6 +1377,12 @@ function App() {
           finalResponseText = histPrefix + responseText;
         }
         
+        // Check if request was aborted before showing results
+        if (isAborted()) {
+          console.log('🛑 Request aborted, skipping market price results');
+          return;
+        }
+        
         const botMessage = {
           id: Date.now() + 2,
           type: 'bot',
@@ -1559,6 +1661,13 @@ function App() {
         }
       }
     } catch (error) {
+      // Check if the error is due to user aborting the request
+      if (error.name === 'AbortError' || error.message === 'The user aborted a request.') {
+        console.log('Request was aborted by user');
+        // Don't show error message for user-initiated stops
+        return;
+      }
+      
       console.error('Error processing message:', error);
       setError('Failed to process your request. Please try again.');
       
@@ -1572,6 +1681,10 @@ function App() {
       setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
+      // Clean up abort controller
+      if (abortControllerRef.current) {
+        abortControllerRef.current = null;
+      }
     }
   };
 
@@ -1906,9 +2019,19 @@ function App() {
                   <Bot className="w-4 h-4 text-gray-600" />
                 </div>
               </div>
-              <div className="flex items-center gap-2 text-gray-500 pt-1">
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="text-sm">Thinking...</span>
+              <div className="flex items-center gap-3 text-gray-500 pt-1">
+                <div className="flex items-center gap-2">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span className="text-sm">Thinking...</span>
+                </div>
+                <button
+                  onClick={handleStopGeneration}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg border border-red-200 transition-colors text-xs font-medium"
+                  title="Stop generation"
+                >
+                  <StopCircle className="w-3.5 h-3.5" />
+                  <span>Stop</span>
+                </button>
               </div>
             </div>
           )}
