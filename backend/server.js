@@ -79,6 +79,16 @@ app.post('/api/sync/yesterday', async (req, res) => {
   try {
     logger.info('Manual sync triggered: yesterday');
     const result = await dailySyncService.syncYesterday();
+    
+    // Return compact response for cron services (to avoid "output too large")
+    const compact = req.query.compact === 'true';
+    if (compact) {
+      return res.json({
+        success: result.success,
+        records: result.recordsSynced || 0
+      });
+    }
+    
     res.json(result);
   } catch (error) {
     logger.error('Manual sync failed:', error);
@@ -121,6 +131,16 @@ app.post('/api/sync/hourly', async (req, res) => {
   try {
     logger.info('Manual hourly sync triggered');
     const result = await hourlySync();
+    
+    // Return compact response for cron services (to avoid "output too large")
+    const compact = req.query.compact === 'true';
+    if (compact) {
+      return res.json({
+        success: result.success,
+        records: result.totalInserted || 0
+      });
+    }
+    
     res.json(result);
   } catch (error) {
     logger.error('Hourly sync failed:', error);
@@ -133,6 +153,16 @@ app.post('/api/sync/cleanup', async (req, res) => {
   try {
     logger.info('Manual cleanup triggered');
     const result = await dailyCleanup();
+    
+    // Return compact response for cron services (to avoid "output too large")
+    const compact = req.query.compact === 'true';
+    if (compact) {
+      return res.json({
+        success: result.success,
+        deleted: result.cleanup?.deletedCount || 0
+      });
+    }
+    
     res.json(result);
   } catch (error) {
     logger.error('Cleanup failed:', error);
