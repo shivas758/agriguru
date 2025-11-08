@@ -878,15 +878,81 @@ function App() {
       // Check if this is a district-level query (show all markets in district)
       const isDistrictQuery = intent.isDistrictQuery === true;
       
+      // Check if this is a state-wide query (only state specified, no district/market)
+      const isStateQuery = intent.isStateQuery === true;
+      
+      // Handle state-wide queries
+      if (isStateQuery) {
+        // Case 1: State-wide market overview (no commodity specified)
+        if (!intent.commodity) {
+          // Too many markets in a state - need user to specify
+          // If user has location access, show markets in their district
+          if (locationService.hasLocationPermission()) {
+            try {
+              const position = await locationService.getCurrentPosition();
+              if (position && position.district && position.state) {
+                const districtMarkets = await supabaseDirect.getMarketsInDistrict(
+                  position.district,
+                  position.state,
+                  10
+                );
+                
+                if (districtMarkets.length > 0) {
+                  const suggestionMessage = {
+                    id: Date.now() + 1,
+                    type: 'bot',
+                    text: queryLanguage === 'hi'
+                      ? `${intent.location.state} में बहुत सारे बाज़ार हैं। आपके जिले (${position.district}) के बाज़ार:`
+                      : `There are too many markets in ${intent.location.state}. Markets in your district (${position.district}):`,
+                    timestamp: new Date(),
+                    language: queryLanguage,
+                    locationBasedSuggestions: {
+                      markets: districtMarkets.map(m => ({ ...m, distance: null })),
+                      userLocation: position,
+                      type: 'district'
+                    }
+                  };
+                  
+                  setMessages(prev => [...prev, suggestionMessage]);
+                  setIsLoading(false);
+                  return;
+                }
+              }
+            } catch (err) {
+              console.log('Could not get user location for state query:', err.message);
+            }
+          }
+          
+          // No location access or couldn't get location - ask user to specify
+          const specifyMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: queryLanguage === 'hi'
+              ? `${intent.location.state} में बहुत सारे बाज़ार हैं। कृपया एक विशिष्ट बाजार या जिला बताएं।`
+              : `There are too many markets in ${intent.location.state}. Please specify a market or district.`,
+            timestamp: new Date(),
+            language: queryLanguage
+          };
+          
+          setMessages(prev => [...prev, specifyMessage]);
+          setIsLoading(false);
+          return;
+        }
+        
+        // Case 2: State-wide commodity query (e.g., "cotton prices in Andhra Pradesh")
+        // Will be handled below - fetch prices from all markets in the state
+        console.log(`State-wide commodity query: ${intent.commodity} in ${intent.location.state}`);
+      }
+      
       // Fetch market prices based on intent
       const queryParams = {
         commodity: intent.commodity, // Can be null for market-wide queries
         commodityAliases: intent.commodityAliases, // Include aliases for better search
         state: intent.location.state,
-        district: intent.location.district,
-        market: isDistrictQuery ? null : intent.location.market, // No market filter for district queries
+        district: isStateQuery ? null : intent.location.district, // No district filter for state queries
+        market: (isDistrictQuery || isStateQuery) ? null : intent.location.market, // No market filter for district/state queries
         date: intent.date,
-        limit: isDistrictQuery ? 200 : (intent.commodity ? 50 : 100) // More results for district queries
+        limit: (isDistrictQuery || isStateQuery) ? 200 : (intent.commodity ? 50 : 100) // More results for district/state queries
       };
       
       // For market-wide queries, remove commodity filter
@@ -984,7 +1050,9 @@ function App() {
           }
         });
         
-        // Convert back to array - now has only latest price per commodity
+        // Convert back to array - now has only latest price per commodity-market-variety combination
+        // For state-wide queries: This ensures we show only the latest arrival date per market
+        // (not multiple days from the same market)
         formattedData = Array.from(latestPrices.values());
         
         // For market-wide queries, sort by arrival quantity (trading volume) in descending order
@@ -1197,11 +1265,12 @@ function App() {
         );
         
         // For market-wide queries, show more results (up to 20), for specific commodity show up to 10
-        const maxResults = !intent.commodity ? 20 : 10;
+        // For state-wide commodity queries, show up to 15 results from different markets
+        const maxResults = !intent.commodity ? 20 : (isStateQuery ? 15 : 10);
         const finalDisplayData = displayData.length > 0 ? displayData : formattedData;
         
-        // For district queries, group by market and show cards (not images)
-        const displayStyle = isDistrictQuery ? 'cards' : (!intent.commodity ? 'images' : 'cards');
+        // For district/state queries, group by market and show cards (not images)
+        const displayStyle = (isDistrictQuery || isStateQuery) ? 'cards' : (!intent.commodity ? 'images' : 'cards');
         
         // Add historical message if available
         let finalResponseText = responseText;
@@ -1219,13 +1288,14 @@ function App() {
           timestamp: new Date(),
           language: queryLanguage,
           priceData: finalDisplayData.slice(0, maxResults),
-          fullPriceData: !intent.commodity && !isDistrictQuery ? finalDisplayData : null, // Images only for market-wide (not district-wide)
-          isMarketOverview: !intent.commodity && !isDistrictQuery, // Flag for market-wide queries (images)
+          fullPriceData: !intent.commodity && !isDistrictQuery && !isStateQuery ? finalDisplayData : null, // Images only for market-wide (not district/state-wide)
+          isMarketOverview: !intent.commodity && !isDistrictQuery && !isStateQuery, // Flag for market-wide queries (images)
           isDistrictOverview: isDistrictQuery, // Flag for district-wide queries (cards)
+          isStateOverview: isStateQuery, // Flag for state-wide queries (cards)
           isHistoricalData: intent.isHistoricalQuery || false,
           marketInfo: !intent.commodity ? {
-            market: isDistrictQuery ? null : intent.location.market,
-            district: intent.location.district,
+            market: (isDistrictQuery || isStateQuery) ? null : intent.location.market,
+            district: isStateQuery ? null : intent.location.district,
             state: intent.location.state,
             displayStyle: displayStyle
           } : null

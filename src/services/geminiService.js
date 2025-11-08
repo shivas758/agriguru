@@ -274,18 +274,24 @@ FOR MARKET PRICE QUERIES (price_inquiry or market_overview):
   "queryType": "price_inquiry or market_overview",
   "needsDisambiguation": false,
   "isHistoricalQuery": true if asking about past dates/years (e.g., 2010, 2015, last year), false otherwise,
-  "isDistrictQuery": true if explicitly asking for district-level data (keywords: "district prices", "all markets in", "entire district"), false otherwise
+  "isDistrictQuery": true if explicitly asking for district-level data (keywords: "district prices", "all markets in", "entire district"), false otherwise,
+  "isStateQuery": true if ONLY state is mentioned without district or market (e.g., "Andhra Pradesh prices", "cotton in AP"), false otherwise
 }
 
-CRITICAL MARKET vs DISTRICT DISAMBIGUATION:
-- DEFAULT BEHAVIOR: Treat location as MARKET unless explicitly mentioned as district
+CRITICAL MARKET vs DISTRICT vs STATE DISAMBIGUATION:
+- DEFAULT BEHAVIOR: Treat location as MARKET unless explicitly mentioned as district or state-only
 - Many market and district names are identical (e.g., "Adoni" is both market and district "Kurnool")
 - ONLY set isDistrictQuery=true if query contains explicit district keywords:
   * "district" (e.g., "Kurnool district prices")
   * "all markets in" (e.g., "all markets in Kurnool")  
   * "entire" (e.g., "entire Kurnool region")
-- For simple queries like "Adoni prices" or "Kurnool market" → isDistrictQuery=false, treat as MARKET
+- ONLY set isStateQuery=true if query mentions ONLY state without district or market:
+  * "Andhra Pradesh market prices" → isStateQuery=true, market=null, district=null, state="Andhra Pradesh"
+  * "cotton prices in AP" → isStateQuery=true, commodity="cotton", market=null, district=null, state="Andhra Pradesh"
+  * "prices in Telangana" → isStateQuery=true, market=null, district=null, state="Telangana"
+- For simple queries like "Adoni prices" or "Kurnool market" → isDistrictQuery=false, isStateQuery=false, treat as MARKET
 - When isDistrictQuery=true, set market=null and only populate district+state
+- When isStateQuery=true, set market=null and district=null, only populate state
 
 EXAMPLES:
 - "What's the weather like in Adoni?" → queryType: "weather", city: "Adoni", district: "Kurnool", state: "Andhra Pradesh", is7DayForecast: false, numberOfDays: 1
@@ -311,12 +317,12 @@ EXAMPLES:
 - "Amravati market prices" → commodity: null, market: "Amravati", district: "Amravati", state: "Maharashtra", queryType: "market_overview", isHistoricalQuery: false
 - "What were the market prices of Adoni in 2010?" → commodity: null, market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", date: "2010", queryType: "market_overview", isHistoricalQuery: true
 - "onion prices in Bangalore in 2015" → commodity: "onion", market: "Bangalore", district: "Bangalore Urban", state: "Karnataka", date: "2015", queryType: "price_inquiry", isHistoricalQuery: true
-- "market prices last year in Delhi" → commodity: null, market: "Delhi", state: "Delhi", date: "[calculate last year as YYYY]", queryType: "market_overview", isHistoricalQuery: true
+- "market prices last year in Delhi" → commodity: null, market: "Delhi", state: "Delhi", date: "[calculate last year as YYYY]", queryType: "market_overview", isHistoricalQuery: true, isDistrictQuery: false, isStateQuery: false
 - "adoni prices in 2023" → commodity: null, market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", date: "2023", queryType: "market_overview", isHistoricalQuery: true
-- "all markets in Kurnool" → commodity: null, market: null, district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview", isHistoricalQuery: false, isDistrictQuery: true
-- "What were the market prices of Adoni in 2010?" → commodity: null, market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", date: "2010", queryType: "market_overview", isHistoricalQuery: true, isDistrictQuery: false
-- "onion prices in Bangalore in 2015" → commodity: "onion", market: "Bangalore", district: "Bangalore Urban", state: "Karnataka", date: "2015", queryType: "price_inquiry", isHistoricalQuery: true, isDistrictQuery: false
-- "market prices last year in Delhi" → commodity: null, market: "Delhi", state: "Delhi", date: "[calculate last year as YYYY]", queryType: "market_overview", isHistoricalQuery: true, isDistrictQuery: false
+- "all markets in Kurnool" → commodity: null, market: null, district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview", isHistoricalQuery: false, isDistrictQuery: true, isStateQuery: false
+- "Andhra Pradesh market prices" → commodity: null, market: null, district: null, state: "Andhra Pradesh", queryType: "market_overview", isHistoricalQuery: false, isDistrictQuery: false, isStateQuery: true
+- "cotton prices in AP" → commodity: "cotton", market: null, district: null, state: "Andhra Pradesh", queryType: "price_inquiry", isHistoricalQuery: false, isDistrictQuery: false, isStateQuery: true
+- "prices in Telangana" → commodity: null, market: null, district: null, state: "Telangana", queryType: "market_overview", isHistoricalQuery: false, isDistrictQuery: false, isStateQuery: true
 
 CRITICAL FOR MARKET PRICE QUERIES:
 - Infer district and state from market/city names using your geography knowledge
