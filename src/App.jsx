@@ -1413,11 +1413,33 @@ function App() {
   const handleMarketSelection = async (suggestion) => {
     console.log('User selected market:', suggestion);
     
-    // Create a user message showing what they selected
+    // ✅ Get the original query type from the suggestion (price_trend, market_overview, etc.)
+    const originalQueryType = suggestion.queryType || 'market_overview';
+    
+    // Create appropriate query text based on query type
+    let queryText;
+    if (originalQueryType === 'price_trend') {
+      queryText = `${suggestion.market} price trends`;
+    } else if (originalQueryType === 'weather') {
+      queryText = `weather in ${suggestion.market}`;
+    } else {
+      queryText = `${suggestion.market} market prices`;
+    }
+    
+    // ✅ Re-execute the ORIGINAL query type with corrected market name
+    if (originalQueryType === 'price_trend' || originalQueryType === 'weather') {
+      // For price trends and weather, re-run through handleSendMessage
+      // (it will add the user message and process correctly)
+      console.log(`Re-executing ${originalQueryType} query with corrected market name: ${queryText}`);
+      await handleSendMessage(queryText, false, 'en');
+      return; // handleSendMessage handles everything
+    }
+    
+    // For market_overview (default), continue with existing inline logic
     const userMessage = {
       id: Date.now(),
       type: 'user',
-      text: `${suggestion.market} market prices`,
+      text: queryText,
       timestamp: new Date(),
       isVoice: false,
       language: 'en'
@@ -1428,7 +1450,7 @@ function App() {
     setError('');
     
     try {
-      // Directly construct the intent instead of asking Gemini again
+      // Construct intent for market price query
       const intent = {
         commodity: null,
         location: {
