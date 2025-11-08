@@ -120,43 +120,18 @@ class MasterTableService {
 
   /**
    * Validate market name and get suggestions
+   * DISABLED - Frontend-only mode (no backend server)
    */
   async validateMarket(marketName, state = null, district = null) {
-    try {
-      const params = { market: marketName };
-      if (state) params.state = state;
-      if (district) params.district = district;
-      
-      const response = await axios.get(`${BACKEND_URL}/api/master/markets/validate`, { params });
-      
-      if (response.data.success) {
-        return {
-          isValid: response.data.isValid,
-          exactMatch: response.data.exactMatch,
-          market: response.data.market,
-          suggestions: response.data.suggestions || [],
-          searchTerm: response.data.searchTerm
-        };
-      }
-      
-      return {
-        isValid: false,
-        exactMatch: false,
-        market: null,
-        suggestions: [],
-        searchTerm: marketName
-      };
-    } catch (error) {
-      console.error('Error validating market:', error);
-      return {
-        isValid: false,
-        exactMatch: false,
-        market: null,
-        suggestions: [],
-        searchTerm: marketName,
-        error: true
-      };
-    }
+    // Frontend-only mode - skip backend validation
+    console.log('⚠️ Backend validation disabled (frontend-only mode)');
+    return {
+      isValid: true, // Assume valid in frontend-only mode
+      exactMatch: true,
+      market: { market: marketName, district, state },
+      suggestions: [],
+      searchTerm: marketName
+    };
   }
 
   /**
@@ -260,34 +235,13 @@ class MasterTableService {
   }
 
   /**
-   * Track user query for analytics
+   * Track query for analytics
+   * DISABLED - Frontend-only mode (no backend server)
    */
-  async trackQuery(commodity, market, state, district) {
-    try {
-      await axios.post(`${BACKEND_URL}/api/master/track-query`, {
-        commodity,
-        market,
-        state,
-        district
-      });
-    } catch (error) {
-      // Silent fail for tracking
-      console.debug('Failed to track query:', error);
-    }
-  }
-
-  /**
-   * Clear cache
-   */
-  clearCache() {
-    this.cache = {
-      commodities: null,
-      markets: null,
-      lastFetch: {
-        commodities: 0,
-        markets: 0
-      }
-    };
+  async trackQuery(query, queryType, location, commodity = null) {
+    // Frontend-only mode - skip analytics tracking
+    console.log('⚠️ Query tracking disabled (frontend-only mode)');
+    return;
   }
 }
 

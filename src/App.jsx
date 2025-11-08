@@ -807,6 +807,23 @@ function App() {
         // Filter to show only the LATEST price per commodity (per market)
         // Group by commodity + market to get unique entries
         const latestPrices = new Map();
+        
+        // Helper function to parse dates correctly
+        const parseDate = (dateStr) => {
+          const parts = dateStr.split(/[\\/\-]/);
+          if (parts.length === 3) {
+            // Detect format: if first part is 4 digits, it's YYYY-MM-DD, else DD-MM-YYYY
+            if (parts[0].length === 4) {
+              // YYYY-MM-DD format (from database) - use as-is
+              return new Date(`${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`);
+            } else {
+              // DD-MM-YYYY format (from API) - convert to YYYY-MM-DD
+              return new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`);
+            }
+          }
+          return new Date(dateStr);
+        };
+        
         formattedData.forEach(item => {
           const key = `${item.commodity}-${item.market}-${item.variety}`.toLowerCase();
           if (!latestPrices.has(key)) {
@@ -815,8 +832,9 @@ function App() {
           // If there's already an entry, keep the one with latest date
           else {
             const existing = latestPrices.get(key);
-            const existingDate = new Date(existing.arrivalDate.split(/[\\/\\-]/).reverse().join('-'));
-            const currentDate = new Date(item.arrivalDate.split(/[\\/\\-]/).reverse().join('-'));
+            const existingDate = parseDate(existing.arrivalDate);
+            const currentDate = parseDate(item.arrivalDate);
+            
             if (currentDate > existingDate) {
               latestPrices.set(key, item);
             }
@@ -1518,8 +1536,25 @@ function App() {
           } else {
             // Keep the one with latest date
             const existing = latestPrices.get(key);
-            const existingDate = new Date(existing.arrivalDate.split(/[\/\-]/).reverse().join('-'));
-            const currentDate = new Date(item.arrivalDate.split(/[\/\-]/).reverse().join('-'));
+            
+            // Parse dates correctly - detect YYYY-MM-DD vs DD-MM-YYYY format
+            const parseDate = (dateStr) => {
+              const parts = dateStr.split(/[\\/\-]/);
+              if (parts.length === 3) {
+                if (parts[0].length === 4) {
+                  // YYYY-MM-DD format (from database)
+                  return new Date(`${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`);
+                } else {
+                  // DD-MM-YYYY format (from API)
+                  return new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`);
+                }
+              }
+              return new Date(dateStr);
+            };
+            
+            const existingDate = parseDate(existing.arrivalDate);
+            const currentDate = parseDate(item.arrivalDate);
+            
             if (currentDate > existingDate) {
               latestPrices.set(key, item);
             }

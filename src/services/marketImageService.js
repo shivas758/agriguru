@@ -158,8 +158,14 @@ class MarketImageService {
         if (!item.arrivalDate) return null;
         const parts = item.arrivalDate.split(/[-/]/);
         if (parts.length === 3) {
-          const [day, month, year] = parts;
-          return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+          // Detect format: if first part is 4 digits, it's YYYY-MM-DD, else DD-MM-YYYY
+          if (parts[0].length === 4) {
+            // YYYY-MM-DD format (from database)
+            return new Date(`${parts[0]}-${parts[1].padStart(2, '0')}-${parts[2].padStart(2, '0')}`);
+          } else {
+            // DD-MM-YYYY format (from API)
+            return new Date(`${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`);
+          }
         }
         return null;
       }).filter(d => d && !isNaN(d.getTime()));
@@ -443,12 +449,22 @@ class MarketImageService {
     if (!dateStr) return '';
     
     try {
-      // Parse date in DD-MM-YYYY or DD/MM/YYYY format
+      // Parse date - handle both YYYY-MM-DD (from DB) and DD-MM-YYYY (from API) formats
       const parts = dateStr.split(/[-/]/);
       if (parts.length !== 3) return dateStr;
       
-      const day = parseInt(parts[0], 10);
-      const month = parseInt(parts[1], 10) - 1; // 0-indexed
+      let day, month;
+      
+      // Detect format: if first part is 4 digits, it's YYYY-MM-DD, else DD-MM-YYYY
+      if (parts[0].length === 4) {
+        // YYYY-MM-DD format (from database)
+        day = parseInt(parts[2], 10);
+        month = parseInt(parts[1], 10) - 1; // 0-indexed
+      } else {
+        // DD-MM-YYYY format (from API)
+        day = parseInt(parts[0], 10);
+        month = parseInt(parts[1], 10) - 1; // 0-indexed
+      }
       
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                          'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -466,12 +482,18 @@ class MarketImageService {
     if (!dateStr) return '';
     
     try {
-      // Parse date in DD-MM-YYYY or DD/MM/YYYY format
+      // Parse date - handle both YYYY-MM-DD (from DB) and DD-MM-YYYY (from API) formats
       const parts = dateStr.split(/[-/]/);
       if (parts.length !== 3) return dateStr;
       
-      const year = parts[2]; // Year is the third part
-      return year;
+      // Detect format: if first part is 4 digits, it's YYYY-MM-DD, else DD-MM-YYYY
+      if (parts[0].length === 4) {
+        // YYYY-MM-DD format (from database)
+        return parts[0];
+      } else {
+        // DD-MM-YYYY format (from API)
+        return parts[2];
+      }
     } catch (error) {
       return dateStr;
     }
