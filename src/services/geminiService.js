@@ -664,6 +664,121 @@ Return ONLY the JSON array, no other text.`;
     }
   }
 
+  /**
+   * Validate if a location name is real and suggest resolution strategy
+   * This helps distinguish between:
+   * 1. Misspelled market names (fuzzy match needed)
+   * 2. Valid locations without markets (nearby markets needed)
+   */
+  async validateLocationAndSuggestStrategy(locationName, state = null, district = null) {
+    if (!this.model) {
+      return {
+        isRealLocation: false,
+        strategy: 'fuzzy_match',
+        confidence: 0.5
+      };
+    }
+
+    try {
+      const prompt = `
+You are an expert on Indian geography, especially Andhra Pradesh, Telangana, Karnataka, and other Indian states.
+
+Location Name: "${locationName}"
+State: ${state || 'unknown'}
+District: ${district || 'unknown'}
+
+TASK: Determine if "${locationName}" is a REAL place name (village, town, mandal, or city) in India.
+
+CRITICAL CONTEXT:
+- Government market databases use OLD district names (pre-2022 for AP, pre-2016 for Telangana)
+- Many villages/towns don't have their own agricultural markets but are real places
+- Users might search for their village name expecting to see nearby market prices
+
+EXAMPLES OF REAL PLACES:
+- "Holagunda" - Real village in Kurnool district, AP (no market, nearby: Kurnool, Adoni) → strategy: "nearby_markets"
+- "Pattikonda" - Real town in Kurnool district (has market) → strategy: "nearby_markets" (may not have data)
+- "Aspari" - Real mandal in Kurnool district (has market) → strategy: "both" (uncertain about data availability)
+- "Ravulapalem" - Real town in East Godavari (has market) → strategy: "both" if data uncertain
+- "Amalapuram" - Real city in East Godavari/Konaseema (has market) → strategy: "nearby_markets" if no data
+- "Adomi" - Not a real place, likely misspelling of "Adoni" → strategy: "fuzzy_match"
+
+CRITICAL: For smaller markets/mandals, even if they have a market, data availability is uncertain. 
+Use strategy: "both" to show spelling corrections AND nearby markets, giving users all options.
+
+YOUR ANALYSIS SHOULD DETERMINE:
+1. Is this a REAL place name? (village/town/mandal/city/district)
+2. What district does it belong to? (use OLD district names for AP/Telangana)
+3. What state is it in?
+4. Does it likely have its own agricultural market?
+
+Return ONLY a JSON object with this structure:
+{
+  "isRealLocation": true/false,
+  "locationType": "village/town/mandal/city/district/unknown",
+  "actualDistrict": "District name using OLD boundaries",
+  "actualState": "State name",
+  "hasMarket": true/false (best guess),
+  "confidence": 0.0-1.0 (how confident you are),
+  "strategy": "fuzzy_match" (if misspelling) OR "nearby_markets" (if real location without market) OR "both" (if uncertain),
+  "reasoning": "Brief explanation",
+  "nearbyMarkets": ["Market1", "Market2", "Market3"] (suggest 3-5 geographically nearest markets if it's a real location)
+}
+
+CRITICAL DISTRICT MAPPING (Use OLD names):
+Andhra Pradesh (pre-2022):
+- Any location in Konaseema region → "East Godavari"
+- Eluru/Bhimavaram region → "West Godavari"
+- Narasaraopet region → "Guntur"
+- Anakapalli region → "Visakhapatnam"
+- Adoni/Alur/Pattikonda/Holagunda → "Kurnool"
+
+Telangana (pre-2016):
+- Mulugu → "Warangal"
+- Narayanpet → "Mahabubnagar"
+- Vikarabad → "Ranga Reddy"
+
+STRATEGY GUIDELINES:
+- If isRealLocation=true AND hasMarket=false AND confidence > 0.8 → strategy: "nearby_markets"
+- If isRealLocation=false AND confidence > 0.8 → strategy: "fuzzy_match"
+- If isRealLocation=true AND hasMarket=true BUT you're not 100% sure about data availability → strategy: "both"
+- If uncertain OR confidence < 0.8 → strategy: "both"
+- IMPORTANT: When in doubt between spelling error vs real location, use "both" to show user all options
+
+Return ONLY the JSON object, no other text.
+
+JSON:`;
+
+      const result = await this.model.generateContent(prompt);
+      const response = await result.response;
+      const text = response.text().trim();
+      
+      console.log('📍 Location validation response:', text);
+      
+      // Extract JSON from response
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        const validation = JSON.parse(jsonMatch[0]);
+        console.log(`📍 Location "${locationName}" validation:`, validation);
+        return validation;
+      }
+      
+      // Fallback if parsing fails
+      return {
+        isRealLocation: false,
+        strategy: 'fuzzy_match',
+        confidence: 0.5
+      };
+    } catch (error) {
+      console.error('Error validating location:', error);
+      return {
+        isRealLocation: false,
+        strategy: 'fuzzy_match',
+        confidence: 0.5,
+        error: true
+      };
+    }
+  }
+
   async getWeatherInfo(query, location, language = 'en') {
     if (!this.model) {
       return {

@@ -406,29 +406,59 @@ function App() {
         return;
       }
       
-      // ✅ UNIVERSAL MARKET VALIDATION: Apply to ALL queries with market location
-      // (price trends, market prices, district search, weather with market)
+      // ✅ INTELLIGENT MARKET VALIDATION: Distinguish between misspellings and real locations without markets
+      // Uses Gemini to determine if the location is a real place or a typo
       if (intent.location && intent.location.market) {
-        console.log(`🔍 [Universal] Validating market name: "${intent.location.market}"`);
-        const marketValidation = await supabaseDirect.validateMarket(
-          intent.location.market
+        console.log(`🔍 [Intelligent] Validating market name: "${intent.location.market}"`);
+        const marketValidation = await supabaseDirect.validateMarketWithLocationIntelligence(
+          intent.location.market,
+          intent.location.state,
+          intent.location.district,
+          geminiService
         );
         
-        if (!marketValidation.exactMatch && marketValidation.suggestions.length > 0) {
-          // Market name is misspelled - show suggestions immediately
-          const topSuggestion = marketValidation.suggestions[0];
-          console.log(`⚠️ "${intent.location.market}" not found. Did you mean "${topSuggestion.market}"?`);
+        if (marketValidation.exactMatch) {
+          // Exact match found - use validated market name
+          intent.location.market = marketValidation.market.market;
+          intent.location.district = marketValidation.market.district;
+          intent.location.state = marketValidation.market.state;
+          console.log(`✅ Validated: "${intent.location.market}" → ${intent.location.market}, ${intent.location.district}`);
+        } else {
+          // No exact match - check strategy
+          const { strategy, spellingSuggestions, nearbySuggestions, locationValidation } = marketValidation;
           
-          const suggestionMessage = {
-            id: Date.now() + 1,
-            type: 'bot',
-            text: queryLanguage === 'hi'
+          console.log(`📍 Strategy: ${strategy}`, { spellingSuggestions: spellingSuggestions.length, nearbySuggestions: nearbySuggestions.length });
+          
+          // Build message based on strategy
+          let messageText = '';
+          let marketSuggestions = null;
+          
+          if (strategy === 'nearby_markets' && nearbySuggestions.length > 0) {
+            // Real location without market - show nearby markets
+            messageText = queryLanguage === 'hi'
+              ? `"${intent.location.market}" एक ${locationValidation?.locationType || 'स्थान'} है लेकिन वहां मार्केट नहीं है।\n\n📍 नज़दीकी बाज़ार जहाँ डेटा उपलब्ध है:`
+              : `"${intent.location.market}" is a ${locationValidation?.locationType || 'location'} but doesn't have a market.\n\n📍 Nearby markets where data is available:`;
+            
+            marketSuggestions = {
+              suggestions: nearbySuggestions.slice(0, 5).map(m => ({
+                market: m.market,
+                district: m.district,
+                state: m.state,
+                distanceText: 'Nearby'
+              })),
+              originalMarket: intent.location.market,
+              type: 'nearby_markets',
+              queryType: intent.queryType,
+              locationInfo: locationValidation
+            };
+          } else if (strategy === 'fuzzy_match' && spellingSuggestions.length > 0) {
+            // Likely misspelling - show spelling suggestions
+            messageText = queryLanguage === 'hi'
               ? `"${intent.location.market}" नहीं मिला। क्या आपका मतलब यह था?`
-              : `"${intent.location.market}" not found. Did you mean:`,
-            timestamp: new Date(),
-            language: queryLanguage,
-            marketSuggestions: {
-              suggestions: marketValidation.suggestions.slice(0, 5).map(m => ({
+              : `"${intent.location.market}" not found. Did you mean:`;
+            
+            marketSuggestions = {
+              suggestions: spellingSuggestions.slice(0, 5).map(m => ({
                 market: m.market,
                 district: m.district,
                 state: m.state,
@@ -436,25 +466,138 @@ function App() {
               })),
               originalMarket: intent.location.market,
               type: 'spelling',
-              queryType: intent.queryType // Preserve query type for re-execution
-            }
-          };
+              queryType: intent.queryType
+            };
+          } else if (strategy === 'both') {
+            // Show both options
+            messageText = queryLanguage === 'hi'
+              ? `"${intent.location.market}" नहीं मिला।\n\n🔍 यदि आपने गलत स्पेलिंग लिखी:\n\nया\n\n📍 यदि यह एक गांव/कस्बा है तो नज़दीकी बाज़ार:`
+              : `"${intent.location.market}" not found.\n\n🔍 If you meant one of these markets:\n\nOr\n\n📍 If this is a village/town, nearby markets:`;
+            
+            // Combine both suggestions
+            marketSuggestions = {
+              suggestions: [
+                ...spellingSuggestions.slice(0, 3).map(m => ({
+                  market: m.market,
+                  district: m.district,
+                  state: m.state,
+                  similarity: m.similarity,
+                  type: 'spelling'
+                })),
+                ...nearbySuggestions.slice(0, 3).map(m => ({
+                  market: m.market,
+                  district: m.district,
+                  state: m.state,
+                  type: 'nearby'
+                }))
+              ],
+              originalMarket: intent.location.market,
+              type: 'both',
+              queryType: intent.queryType,
+              locationInfo: locationValidation
+            };
+          } else {
+            // No suggestions found
+            messageText = queryLanguage === 'hi'
+              ? `"${intent.location.market}" के लिए कोई डेटा या सुझाव उपलब्ध नहीं है।`
+              : `No data or suggestions available for "${intent.location.market}".`;
+          }
           
-          setMessages(prev => [...prev, suggestionMessage]);
-          setIsLoading(false);
-          return;
-        } else if (marketValidation.exactMatch) {
-          // Exact match found - use validated market name
-          intent.location.market = marketValidation.market.market;
-          intent.location.district = marketValidation.market.district;
-          intent.location.state = marketValidation.market.state;
-          console.log(`✅ Validated: "${intent.location.market}" → ${intent.location.market}, ${intent.location.district}`);
+          if (marketSuggestions) {
+            const suggestionMessage = {
+              id: Date.now() + 1,
+              type: 'bot',
+              text: messageText,
+              timestamp: new Date(),
+              language: queryLanguage,
+              marketSuggestions
+            };
+            
+            setMessages(prev => [...prev, suggestionMessage]);
+            setIsLoading(false);
+            return;
+          }
         }
       }
       
       // Handle price trend queries
       if (intent.queryType === 'price_trend') {
         console.log('Price trend query detected, fetching historical data...');
+        
+        // ✅ INTELLIGENT VALIDATION FOR PRICE TRENDS
+        if (intent.location && intent.location.market) {
+          console.log(`🔍 [Price Trend] Validating market name: "${intent.location.market}"`);
+          const marketValidation = await supabaseDirect.validateMarketWithLocationIntelligence(
+            intent.location.market,
+            intent.location.state,
+            intent.location.district,
+            geminiService
+          );
+          
+          if (marketValidation.exactMatch) {
+            // Use validated market
+            intent.location.market = marketValidation.market.market;
+            intent.location.district = marketValidation.market.district;
+            intent.location.state = marketValidation.market.state;
+          } else if (!marketValidation.exactMatch) {
+            // No exact match - show suggestions for trends too
+            const { strategy, spellingSuggestions, nearbySuggestions, locationValidation } = marketValidation;
+            
+            if (spellingSuggestions.length > 0 || nearbySuggestions.length > 0) {
+              let messageText = '';
+              
+              if (strategy === 'nearby_markets' && nearbySuggestions.length > 0) {
+                messageText = queryLanguage === 'hi'
+                  ? `"${intent.location.market}" एक ${locationValidation?.locationType || 'स्थान'} है लेकिन वहां मार्केट नहीं है।\n\n📍 नज़दीकी बाज़ार जहाँ ट्रेंड डेटा उपलब्ध है:`
+                  : `"${intent.location.market}" is a ${locationValidation?.locationType || 'location'} but doesn't have a market.\n\n📍 Nearby markets where trend data is available:`;
+              } else if (strategy === 'fuzzy_match' && spellingSuggestions.length > 0) {
+                messageText = queryLanguage === 'hi'
+                  ? `"${intent.location.market}" नहीं मिला। क्या आपका मतलब यह था?`
+                  : `"${intent.location.market}" not found. Did you mean:`;
+              } else {
+                messageText = queryLanguage === 'hi'
+                  ? `"${intent.location.market}" नहीं मिला।\n\n🔍 यदि आपने गलत स्पेलिंग लिखी:\n\nया\n\n📍 यदि यह एक गांव/कस्बा है तो नज़दीकी बाज़ार:`
+                  : `"${intent.location.market}" not found.\n\n🔍 If you meant one of these markets:\n\nOr\n\n📍 If this is a village/town, nearby markets:`;
+              }
+              
+              const marketSuggestions = {
+                suggestions: [
+                  ...spellingSuggestions.slice(0, 3).map(m => ({
+                    market: m.market,
+                    district: m.district,
+                    state: m.state,
+                    similarity: m.similarity,
+                    type: 'spelling'
+                  })),
+                  ...nearbySuggestions.slice(0, 3).map(m => ({
+                    market: m.market,
+                    district: m.district,
+                    state: m.state,
+                    type: 'nearby'
+                  }))
+                ],
+                originalMarket: intent.location.market,
+                type: spellingSuggestions.length > 0 && nearbySuggestions.length > 0 ? 'both' : 
+                      (spellingSuggestions.length > 0 ? 'spelling' : 'nearby_markets'),
+                queryType: intent.queryType,
+                locationInfo: locationValidation
+              };
+              
+              const suggestionMessage = {
+                id: Date.now() + 1,
+                type: 'bot',
+                text: messageText,
+                timestamp: new Date(),
+                language: queryLanguage,
+                marketSuggestions
+              };
+              
+              setMessages(prev => [...prev, suggestionMessage]);
+              setIsLoading(false);
+              return;
+            }
+          }
+        }
         
         const trendParams = {
           commodity: intent.commodity,
@@ -1247,76 +1390,48 @@ function App() {
               }
             }
             
-            // Get suggestions from master tables if market was specified
+            // ✅ INTELLIGENT SUGGESTIONS: Use both spelling corrections AND nearby markets when no data found
             if (intent.location.market) {
-              // First check if market name needs correction using master table
-              const marketValidation = await supabaseDirect.validateMarket(
-                intent.location.market
+              console.log(`🔍 [No Data] Using intelligent validation for "${intent.location.market}"`);
+              
+              // Use intelligent validation to get both types of suggestions
+              const marketValidation = await supabaseDirect.validateMarketWithLocationIntelligence(
+                intent.location.market,
+                intent.location.state,
+                intent.location.district,
+                geminiService
               );
               
-              if (!marketValidation.exactMatch && marketValidation.suggestions.length > 0) {
+              const spellingSuggestions = marketValidation.spellingSuggestions || [];
+              const nearbySuggestions = marketValidation.nearbySuggestions || [];
+              const locationValidation = marketValidation.locationValidation;
+              
+              console.log(`📍 Suggestions found - Spelling: ${spellingSuggestions.length}, Nearby: ${nearbySuggestions.length}`);
+              
+              // Show BOTH types of suggestions if available
+              if (spellingSuggestions.length > 0 || nearbySuggestions.length > 0) {
                 marketSuggestions = {
-                  suggestions: marketValidation.suggestions.map(m => ({
-                    market: m.market,
-                    district: m.district,
-                    state: m.state,
-                    similarity: m.similarity
-                  })),
-                  originalMarket: intent.location.market,
-                  type: 'spelling'
-                };
-                console.log(`Found ${marketValidation.suggestions.length} market suggestions from master table`);
-              }
-            }
-            
-            // ✅ FIX 2: Get nearby markets from Supabase directly (no backend call!)
-            if (!marketSuggestions && !locationBasedSuggestions && intent.location.district && intent.location.state) {
-              try {
-                console.log(`🔍 Getting markets in ${intent.location.district} district...`);
-                const districtMarkets = await supabaseDirect.getMarketsInDistrict(
-                  intent.location.district,
-                  intent.location.state,
-                  5  // limit
-                );
-                
-                if (districtMarkets.length > 0) {
-                  marketSuggestions = {
-                    suggestions: districtMarkets.map(m => ({
+                  suggestions: [
+                    ...spellingSuggestions.slice(0, 3).map(m => ({
                       market: m.market,
                       district: m.district,
                       state: m.state,
-                      distance: null,
-                      distanceText: 'Same district'
+                      similarity: m.similarity,
+                      type: 'spelling'
                     })),
-                    originalMarket: intent.location.market,
-                    type: 'same_district'
-                  };
-                  console.log(`Found ${districtMarkets.length} markets in ${intent.location.district} district`);
-                }
-              } catch (err) {
-                console.log('Could not get district markets:', err);
-              }
-            }
-            
-            // Fallback: If still no suggestions, get district-based nearby markets
-            if (!marketSuggestions && !locationBasedSuggestions && intent.location.district && intent.location.state) {
-              const nearbyMarkets = await masterTableService.getNearbyMarkets(
-                intent.location.district,
-                intent.location.state,
-                5
-              );
-              
-              if (nearbyMarkets.length > 0) {
-                marketSuggestions = {
-                  suggestions: nearbyMarkets.map(m => ({
-                    market: m.market,
-                    district: m.district,
-                    state: m.state
-                  })),
+                    ...nearbySuggestions.slice(0, 3).map(m => ({
+                      market: m.market,
+                      district: m.district,
+                      state: m.state,
+                      type: 'nearby'
+                    }))
+                  ],
                   originalMarket: intent.location.market,
-                  type: 'district_based'
+                  type: spellingSuggestions.length > 0 && nearbySuggestions.length > 0 ? 'both' : 
+                        (spellingSuggestions.length > 0 ? 'spelling' : 'nearby_markets'),
+                  locationInfo: locationValidation
                 };
-                console.log(`Found ${nearbyMarkets.length} district-based nearby markets`);
+                console.log(`✅ Showing ${marketSuggestions.suggestions.length} total suggestions (both types)`);
               }
             }
             
@@ -1332,12 +1447,21 @@ function App() {
                 : `\n\n📍 Markets near your location (${locationBasedSuggestions.userLocation.city || locationBasedSuggestions.userLocation.district}):`;
             }
             
-            // Add spelling/nearby suggestions
+            // Add spelling/nearby suggestions with intelligent messaging
             if (marketSuggestions) {
-              if (marketSuggestions.type === 'spelling') {
+              if (marketSuggestions.type === 'both') {
+                // Show both spelling corrections and nearby markets
+                noDataMessage += queryLanguage === 'hi'
+                  ? '\n\n🔍 यदि आपने गलत स्पेलिंग लिखी:\n\nया\n\n📍 यदि यह एक गांव/कस्बा है तो नज़दीकी बाज़ार:'
+                  : '\n\n🔍 If you meant one of these markets:\n\nOr\n\n📍 If this is a village/town, nearby markets:';
+              } else if (marketSuggestions.type === 'spelling') {
                 noDataMessage += queryLanguage === 'hi'
                   ? '\n\n🔍 क्या आपका मतलब इनमें से किसी बाज़ार से था?'
                   : '\n\n🔍 Did you mean one of these markets?';
+              } else if (marketSuggestions.type === 'nearby_markets') {
+                noDataMessage += queryLanguage === 'hi'
+                  ? '\n\n📍 नज़दीकी बाज़ार जहाँ डेटा उपलब्ध हो सकता है:'
+                  : '\n\n📍 Nearby markets where data might be available:';
               } else {
                 noDataMessage += queryLanguage === 'hi'
                   ? '\n\n📍 नज़दीकी बाज़ार जहाँ डेटा उपलब्ध हो सकता है:'

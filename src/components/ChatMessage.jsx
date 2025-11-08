@@ -10,16 +10,28 @@ import MarketTrendCard from './MarketTrendCard';
 import MarketSuggestions from './MarketSuggestions';
 import { formatPrice } from '../utils/formatPrice';
 
-// Helper function to parse DD/MM/YYYY or DD-MM-YYYY format
+// Helper function to parse various date formats
 const parseDate = (dateStr) => {
   if (!dateStr) return null;
+  
+  // Check if it's already in ISO format (YYYY-MM-DD)
+  if (/^\d{4}-\d{2}-\d{2}/.test(dateStr)) {
+    return new Date(dateStr);
+  }
   
   // Handle DD/MM/YYYY or DD-MM-YYYY format
   const parts = dateStr.split(/[\/\-]/);
   if (parts.length === 3) {
-    const [day, month, year] = parts;
-    // Create date in YYYY-MM-DD format for proper parsing
-    return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+    // Check if first part is likely year (4 digits) or day (1-2 digits)
+    if (parts[0].length === 4) {
+      // Already in YYYY-MM-DD or YYYY/MM/DD format
+      return new Date(dateStr);
+    } else {
+      // DD/MM/YYYY or DD-MM-YYYY format
+      const [day, month, year] = parts;
+      // Create date in YYYY-MM-DD format for proper parsing
+      return new Date(`${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`);
+    }
   }
   
   // Fallback to standard parsing

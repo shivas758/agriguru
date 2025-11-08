@@ -188,6 +188,109 @@ export const validateMarket = async (marketName) => {
 };
 
 /**
+ * Enhanced market validation with location intelligence
+ * Uses Gemini to distinguish between:
+ * 1. Misspelled market names (fuzzy suggestions)
+ * 2. Valid locations without markets (nearby geographic suggestions)
+ */
+export const validateMarketWithLocationIntelligence = async (marketName, state = null, district = null, geminiService = null) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  // First, try exact match
+  const markets = await getMarkets();
+  const exactMatch = markets.find(
+    m => m.market.toLowerCase() === marketName.toLowerCase()
+  );
+
+  if (exactMatch) {
+    return {
+      exactMatch: true,
+      market: exactMatch,
+      spellingsSuggestions: [],
+      nearbySuggestions: [],
+      strategy: 'exact_match'
+    };
+  }
+
+  // No exact match - use Gemini to determine strategy
+  let locationValidation = null;
+  if (geminiService) {
+    try {
+      locationValidation = await geminiService.validateLocationAndSuggestStrategy(marketName, state, district);
+      console.log('📍 Gemini location validation:', locationValidation);
+    } catch (error) {
+      console.error('Error in location validation:', error);
+    }
+  }
+
+  // Get fuzzy spelling suggestions
+  const spellingSuggestions = markets
+    .map(m => ({
+      ...m,
+      similarity: calculateSimilarity(marketName.toLowerCase(), m.market.toLowerCase())
+    }))
+    .filter(m => m.similarity > 0.5)
+    .sort((a, b) => b.similarity - a.similarity)
+    .slice(0, 5);
+
+  // Get nearby geographic suggestions if location is validated
+  let nearbySuggestions = [];
+  if (locationValidation && locationValidation.isRealLocation) {
+    // Use the corrected district and state from Gemini
+    const searchDistrict = locationValidation.actualDistrict || district;
+    const searchState = locationValidation.actualState || state;
+    
+    if (searchDistrict && searchState) {
+      // Get markets in same district
+      nearbySuggestions = await getMarketsInDistrict(searchDistrict, searchState, 10);
+      
+      // If Gemini provided nearby market names, try to match them
+      if (locationValidation.nearbyMarkets && locationValidation.nearbyMarkets.length > 0) {
+        // Prioritize markets that Gemini suggested
+        const geminiSuggested = nearbySuggestions.filter(m => 
+          locationValidation.nearbyMarkets.some(gm => 
+            m.market.toLowerCase().includes(gm.toLowerCase()) || 
+            gm.toLowerCase().includes(m.market.toLowerCase())
+          )
+        );
+        
+        // Merge with remaining markets
+        const others = nearbySuggestions.filter(m => 
+          !locationValidation.nearbyMarkets.some(gm => 
+            m.market.toLowerCase().includes(gm.toLowerCase()) || 
+            gm.toLowerCase().includes(m.market.toLowerCase())
+          )
+        );
+        
+        nearbySuggestions = [...geminiSuggested, ...others].slice(0, 10);
+      }
+    }
+  }
+
+  // Determine strategy
+  let strategy = 'fuzzy_match'; // default
+  if (locationValidation) {
+    strategy = locationValidation.strategy;
+  } else if (spellingSuggestions.length > 0 && nearbySuggestions.length === 0) {
+    strategy = 'fuzzy_match';
+  } else if (nearbySuggestions.length > 0 && spellingSuggestions.length === 0) {
+    strategy = 'nearby_markets';
+  } else if (spellingSuggestions.length > 0 && nearbySuggestions.length > 0) {
+    strategy = 'both';
+  }
+
+  return {
+    exactMatch: false,
+    market: null,
+    spellingSuggestions,
+    nearbySuggestions,
+    strategy,
+    locationValidation,
+    originalMarket: marketName
+  };
+};
+
+/**
  * Validate commodity name (fuzzy matching)
  */
 export const validateCommodity = async (commodityName) => {
@@ -397,6 +500,7 @@ export default {
   getMarkets,
   getCommodities,
   validateMarket,
+  validateMarketWithLocationIntelligence,
   validateCommodity,
   getNearbyMarkets,
   getMarketsInDistrict,
