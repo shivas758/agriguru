@@ -1,5 +1,5 @@
 import React, { useState, memo } from 'react';
-import { Volume2, User, Bot, MapPin, Package, Calendar, TrendingUp, Navigation, History, Download, Loader2 } from 'lucide-react';
+import { Volume2, User, Bot, MapPin, Package, Calendar, TrendingUp, Navigation, History, Download, Loader2, Clock } from 'lucide-react';
 import voiceService from '../services/voiceService';
 import commodityImageService from '../services/commodityImageService';
 import marketImageService from '../services/marketImageService';
@@ -449,6 +449,11 @@ const ChatMessage = ({ message, onSpeak, onSelectMarket }) => {
             {message.language && message.language !== 'en' && (
               <span>
                 • {message.language.toUpperCase()}
+              </span>
+            )}
+            {message.responseTime && (
+              <span className="flex items-center gap-0.5">
+                • <Clock className="w-3 h-3" /> {message.responseTime}s
               </span>
             )}
           </div>

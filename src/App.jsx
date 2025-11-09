@@ -136,6 +136,9 @@ function App() {
   const handleSendMessage = async (text, isVoice = false, detectedLanguage = null) => {
     if (!text.trim()) return;
 
+    // Track start time for response time measurement
+    const startTime = performance.now();
+
     const userMessage = {
       id: Date.now(),
       type: 'user',
@@ -156,6 +159,12 @@ function App() {
     
     // Helper function to check if request was aborted
     const isAborted = () => abortController.signal.aborted;
+    
+    // Helper function to calculate elapsed time in seconds
+    const getResponseTime = () => {
+      const endTime = performance.now();
+      return ((endTime - startTime) / 1000).toFixed(2);
+    };
 
     try {
       // Detect language if voice input
@@ -215,7 +224,8 @@ function App() {
             weatherLocation: weatherResult.location,
             weatherQuery: conversationContext.originalQuery + ' in ' + text,
             forecastData: weatherResult.forecastData, // For multi-day forecast
-            numberOfDays: numberOfDays
+            numberOfDays: numberOfDays,
+            responseTime: getResponseTime()
           };
           
           setMessages(prev => [...prev, botMessage]);
@@ -359,7 +369,8 @@ function App() {
             type: 'bot',
             text: weatherResult.message,
             timestamp: new Date(),
-            language: queryLanguage
+            language: queryLanguage,
+            responseTime: getResponseTime()
           };
           
           setMessages(prev => [...prev, botMessage]);
@@ -395,7 +406,8 @@ function App() {
             weatherLocation: weatherResult.location,
             weatherQuery: text,
             forecastData: weatherResult.forecastData, // For multi-day forecast
-            numberOfDays: numberOfDays
+            numberOfDays: numberOfDays,
+            responseTime: getResponseTime()
           };
           
           setMessages(prev => [...prev, botMessage]);
@@ -421,7 +433,8 @@ function App() {
             text: weatherResult.message,
             timestamp: new Date(),
             language: queryLanguage,
-            isWeather: false
+            isWeather: false,
+            responseTime: getResponseTime()
           };
           
           setMessages(prev => [...prev, botMessage]);
@@ -446,7 +459,8 @@ function App() {
           type: 'bot',
           text: nonAgricultureMessage,
           timestamp: new Date(),
-          language: queryLanguage
+          language: queryLanguage,
+          responseTime: getResponseTime()
         };
         
         setMessages(prev => [...prev, botMessage]);
@@ -477,7 +491,8 @@ function App() {
           type: 'bot',
           text: answer,
           timestamp: new Date(),
-          language: queryLanguage
+          language: queryLanguage,
+          responseTime: getResponseTime()
         };
         
         setMessages(prev => [...prev, botMessage]);
@@ -503,10 +518,17 @@ function App() {
         
         if (marketValidation.exactMatch) {
           // Exact match found - use validated market name
+          const originalName = intent.location.market;
           intent.location.market = marketValidation.market.market;
           intent.location.district = marketValidation.market.district;
           intent.location.state = marketValidation.market.state;
-          console.log(`✅ Validated: "${intent.location.market}" → ${intent.location.market}, ${intent.location.district}`);
+          
+          // If alternate name was used, log it
+          if (marketValidation.usedAlternateName) {
+            console.log(`✅ Found using alternate name: "${originalName}" → ${marketValidation.matchedName}, ${intent.location.district}`);
+          } else {
+            console.log(`✅ Validated: "${originalName}" → ${intent.location.market}, ${intent.location.district}`);
+          }
         } else {
           // No exact match - check strategy
           const { strategy, spellingSuggestions, nearbySuggestions, locationValidation } = marketValidation;
@@ -594,7 +616,8 @@ function App() {
               text: messageText,
               timestamp: new Date(),
               language: queryLanguage,
-              marketSuggestions
+              marketSuggestions,
+              responseTime: getResponseTime()
             };
             
             setMessages(prev => [...prev, suggestionMessage]);
@@ -673,7 +696,8 @@ function App() {
                 text: messageText,
                 timestamp: new Date(),
                 language: queryLanguage,
-                marketSuggestions
+                marketSuggestions,
+                responseTime: getResponseTime()
               };
               
               setMessages(prev => [...prev, suggestionMessage]);
@@ -702,7 +726,8 @@ function App() {
             type: 'bot',
             text: errorMessage,
             timestamp: new Date(),
-            language: queryLanguage
+            language: queryLanguage,
+            responseTime: getResponseTime()
           };
           
           setMessages(prev => [...prev, botMessage]);
@@ -737,7 +762,8 @@ function App() {
             timestamp: new Date(),
             language: queryLanguage,
             trend: trendResult.trend,
-            marketInfo: marketInfo
+            marketInfo: marketInfo,
+            responseTime: getResponseTime()
           };
           
           setMessages(prev => [...prev, botMessage]);
@@ -789,7 +815,8 @@ function App() {
               commodities: trendResult.commodities,
               dateRange: dateRange
             }, // Data for MarketTrendCard component
-            trendQueryParams: trendParams // Store params for refetching
+            trendQueryParams: trendParams, // Store params for refetching
+            responseTime: getResponseTime()
           };
           
           setMessages(prev => [...prev, botMessage]);
@@ -912,7 +939,8 @@ function App() {
                   markets: locationResult.markets,
                   userLocation: locationResult.userLocation,
                   type: 'nearby'
-                }
+                },
+                responseTime: getResponseTime()
               };
               
               setMessages(prev => [...prev, suggestionMessage]);
@@ -930,7 +958,8 @@ function App() {
                 ? 'आपके स्थान के पास कोई बाजार नहीं मिला। कृपया बाजार का नाम बताएं।'
                 : 'No markets found near your location. Please specify a market name.',
               timestamp: new Date(),
-              language: queryLanguage
+              language: queryLanguage,
+              responseTime: getResponseTime()
             };
             
             setMessages(prev => [...prev, noMarketsMessage]);
@@ -951,7 +980,8 @@ function App() {
               ? 'स्थान प्राप्त नहीं हो सका। कृपया बाजार का नाम बताएं।'
               : 'Could not get your location. Please specify a market name.',
             timestamp: new Date(),
-            language: queryLanguage
+            language: queryLanguage,
+            responseTime: getResponseTime()
           };
           
           setMessages(prev => [...prev, errorMessage]);
@@ -1006,7 +1036,8 @@ function App() {
                       markets: districtMarkets.map(m => ({ ...m, distance: null })),
                       userLocation: position,
                       type: 'district'
-                    }
+                    },
+                    responseTime: getResponseTime()
                   };
                   
                   setMessages(prev => [...prev, suggestionMessage]);
@@ -1027,7 +1058,8 @@ function App() {
               ? `${intent.location.state} में बहुत सारे बाज़ार हैं। कृपया एक विशिष्ट बाजार या जिला बताएं।`
               : `There are too many markets in ${intent.location.state}. Please specify a market or district.`,
             timestamp: new Date(),
-            language: queryLanguage
+            language: queryLanguage,
+            responseTime: getResponseTime()
           };
           
           setMessages(prev => [...prev, specifyMessage]);
@@ -1400,7 +1432,8 @@ function App() {
             district: isStateQuery ? null : intent.location.district,
             state: intent.location.state,
             displayStyle: displayStyle
-          } : null
+          } : null,
+          responseTime: getResponseTime()
         };
 
         setMessages(prev => [...prev, botMessage]);
@@ -1463,7 +1496,8 @@ function App() {
               market: intent.location.market,
               district: intent.location.district,
               state: intent.location.state
-            } : null
+            } : null,
+            responseTime: getResponseTime()
           };
           
           setMessages(prev => [...prev, botMessage]);
@@ -1518,7 +1552,8 @@ function App() {
                 market: intent.location.market,
                 district: intent.location.district,
                 state: intent.location.state
-              } : null
+              } : null,
+              responseTime: getResponseTime()
             };
             
             setMessages(prev => [...prev, botMessage]);
@@ -1738,6 +1773,15 @@ function App() {
   const handleMarketSelection = async (suggestion) => {
     console.log('User selected market:', suggestion);
     
+    // Track start time for response time measurement
+    const startTime = performance.now();
+    
+    // Helper function to calculate elapsed time in seconds
+    const getResponseTime = () => {
+      const endTime = performance.now();
+      return ((endTime - startTime) / 1000).toFixed(2);
+    };
+    
     // ✅ Get the original query type from the suggestion (price_trend, market_overview, etc.)
     const originalQueryType = suggestion.queryType || 'market_overview';
     
@@ -1901,7 +1945,8 @@ function App() {
             market: suggestion.market,
             district: suggestion.district,
             state: suggestion.state
-          }
+          },
+          responseTime: getResponseTime()
         };
         
         setMessages(prev => [...prev, botMessage]);
@@ -1912,7 +1957,8 @@ function App() {
           type: 'bot',
           text: `Sorry, I couldn't find recent price data for ${suggestion.market} market in ${suggestion.district}, ${suggestion.state}. This market may not have reported prices recently.`,
           timestamp: new Date(),
-          language: 'en'
+          language: 'en',
+          responseTime: getResponseTime()
         };
         
         setMessages(prev => [...prev, noDataMessage]);

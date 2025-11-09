@@ -287,12 +287,14 @@ FOR MARKET PRICE QUERIES (price_inquiry or market_overview):
 }
 
 CRITICAL MARKET vs DISTRICT vs STATE DISAMBIGUATION:
-- DEFAULT BEHAVIOR: Treat location as MARKET unless explicitly mentioned as district or state-only
-- Many market and district names are identical (e.g., "Adoni" is both market and district "Kurnool")
-- ONLY set isDistrictQuery=true if query contains explicit district keywords:
-  * "district" (e.g., "Kurnool district prices")
+- DEFAULT BEHAVIOR: Always treat location as MARKET name first, NOT district
+- Many cities have markets with the same name as their district (e.g., "Kurnool" market in Kurnool district)
+- When user says "Kurnool prices" → assume they mean Kurnool MARKET, not all markets in Kurnool district
+- ONLY set isDistrictQuery=true if query explicitly asks for district-level data:
+  * Contains word "district" (e.g., "Kurnool district prices")
   * "all markets in" (e.g., "all markets in Kurnool")  
   * "entire" (e.g., "entire Kurnool region")
+  * "whole" (e.g., "whole Kurnool district")
 - ONLY set isStateQuery=true if query mentions ONLY state without district or market:
   * "Andhra Pradesh market prices" → isStateQuery=true, market=null, district=null, state="Andhra Pradesh"
   * "cotton prices in AP" → isStateQuery=true, commodity="cotton", market=null, district=null, state="Andhra Pradesh"
@@ -329,7 +331,10 @@ EXAMPLES:
 - "onion prices in Bangalore in 2015" → commodity: "onion", market: "Bangalore", district: "Bangalore Urban", state: "Karnataka", date: "2015", queryType: "price_inquiry", isHistoricalQuery: true
 - "market prices last year in Delhi" → commodity: null, market: "Delhi", state: "Delhi", date: "[calculate last year as YYYY]", queryType: "market_overview", isHistoricalQuery: true, isDistrictQuery: false, isStateQuery: false
 - "adoni prices in 2023" → commodity: null, market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", date: "2023", queryType: "market_overview", isHistoricalQuery: true
+- "Kurnool prices" → commodity: null, market: "Kurnool", district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview", isHistoricalQuery: false, isDistrictQuery: false
+- "Kurnool market prices" → commodity: null, market: "Kurnool", district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview", isHistoricalQuery: false, isDistrictQuery: false
 - "all markets in Kurnool" → commodity: null, market: null, district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview", isHistoricalQuery: false, isDistrictQuery: true, isStateQuery: false
+- "Kurnool district prices" → commodity: null, market: null, district: "Kurnool", state: "Andhra Pradesh", queryType: "market_overview", isHistoricalQuery: false, isDistrictQuery: true
 - "Andhra Pradesh market prices" → commodity: null, market: null, district: null, state: "Andhra Pradesh", queryType: "market_overview", isHistoricalQuery: false, isDistrictQuery: false, isStateQuery: true
 - "cotton prices in AP" → commodity: "cotton", market: null, district: null, state: "Andhra Pradesh", queryType: "price_inquiry", isHistoricalQuery: false, isDistrictQuery: false, isStateQuery: true
 - "prices in Telangana" → commodity: null, market: null, district: null, state: "Telangana", queryType: "market_overview", isHistoricalQuery: false, isDistrictQuery: false, isStateQuery: true
@@ -709,17 +714,21 @@ CRITICAL CONTEXT:
 - Government market databases use OLD district names (pre-2022 for AP, pre-2016 for Telangana)
 - Many villages/towns don't have their own agricultural markets but are real places
 - Users might search for their village name expecting to see nearby market prices
+- Some cities have alternate names: Kadapa/Cuddapah, Nellore/Nelluru, etc.
 
 EXAMPLES OF REAL PLACES:
 - "Holagunda" - Real village in Kurnool district, AP (no market, nearby: Kurnool, Adoni) → strategy: "nearby_markets"
-- "Pattikonda" - Real town in Kurnool district (has market) → strategy: "nearby_markets" (may not have data)
-- "Aspari" - Real mandal in Kurnool district (has market) → strategy: "both" (uncertain about data availability)
-- "Ravulapalem" - Real town in East Godavari (has market) → strategy: "both" if data uncertain
-- "Amalapuram" - Real city in East Godavari/Konaseema (has market) → strategy: "nearby_markets" if no data
+- "Pattikonda" - Real town in Kurnool district (has market) → strategy: "fuzzy_match" (let database check for data)
+- "Aspari" - Real mandal in Kurnool district (has market) → strategy: "fuzzy_match" (let database check)
+- "Ravulapalem" - Real town in East Godavari (has market) → strategy: "fuzzy_match"
+- "Amalapuram" - Real city in East Godavari/Konaseema (has market) → strategy: "fuzzy_match"
 - "Adomi" - Not a real place, likely misspelling of "Adoni" → strategy: "fuzzy_match"
+- "Kadapa" - Real city but database might have it as "Cuddapah" → strategy: "fuzzy_match"
 
-CRITICAL: For smaller markets/mandals, even if they have a market, data availability is uncertain. 
-Use strategy: "both" to show spelling corrections AND nearby markets, giving users all options.
+CRITICAL: 
+- Use "fuzzy_match" as default for real locations WITH markets (let database check for data)
+- Use "nearby_markets" ONLY for confirmed villages/small places WITHOUT markets
+- Use "both" ONLY when genuinely uncertain if location exists OR if it's clearly a small village
 
 YOUR ANALYSIS SHOULD DETERMINE:
 1. Is this a REAL place name? (village/town/mandal/city/district)
@@ -754,11 +763,12 @@ Telangana (pre-2016):
 - Vikarabad → "Ranga Reddy"
 
 STRATEGY GUIDELINES:
-- If isRealLocation=true AND hasMarket=false AND confidence > 0.8 → strategy: "nearby_markets"
-- If isRealLocation=false AND confidence > 0.8 → strategy: "fuzzy_match"
-- If isRealLocation=true AND hasMarket=true BUT you're not 100% sure about data availability → strategy: "both"
-- If uncertain OR confidence < 0.8 → strategy: "both"
-- IMPORTANT: When in doubt between spelling error vs real location, use "both" to show user all options
+- If isRealLocation=true AND hasMarket=false AND confidence > 0.7 → strategy: "nearby_markets"
+- If isRealLocation=false → strategy: "fuzzy_match" (spelling error)
+- If isRealLocation=true AND hasMarket=true → strategy: "fuzzy_match" (let database check for data)
+- If uncertain about location existence AND confidence < 0.5 → strategy: "both"
+- DEFAULT: Use "fuzzy_match" - it will check database and find similar names including alternates
+- IMPORTANT: "both" should be rare - only use when genuinely cannot determine if place exists
 
 Return ONLY the JSON object, no other text.
 

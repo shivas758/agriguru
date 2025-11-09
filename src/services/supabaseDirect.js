@@ -147,6 +147,32 @@ export const getCommodities = async (limit = 1000) => {
   return data || [];
 };
 
+// Map of alternate names for markets
+const MARKET_ALTERNATE_NAMES = {
+  'kadapa': 'cuddapah',
+  'cuddapah': 'kadapa',
+  'nellore': 'nelluru',
+  'nelluru': 'nellore',
+  'vijayawada': 'bezawada',
+  'bezawada': 'vijayawada',
+  'mysore': 'mysuru',
+  'mysuru': 'mysore',
+  'bangalore': 'bengaluru',
+  'bengaluru': 'bangalore',
+  'mangalore': 'mangaluru', 
+  'mangaluru': 'mangalore',
+  'bellary': 'ballari',
+  'ballari': 'bellary',
+  'gulbarga': 'kalaburagi',
+  'kalaburagi': 'gulbarga',
+  'belgaum': 'belagavi',
+  'belagavi': 'belgaum',
+  'shimoga': 'shivamogga',
+  'shivamogga': 'shimoga',
+  'hubli': 'hubballi',
+  'hubballi': 'hubli'
+};
+
 /**
  * Validate market name (fuzzy matching)
  */
@@ -156,7 +182,7 @@ export const validateMarket = async (marketName) => {
   // Get all markets
   const markets = await getMarkets();
   
-  // Exact match check
+  // Exact match check (including alternate names)
   const exactMatch = markets.find(
     m => m.market.toLowerCase() === marketName.toLowerCase()
   );
@@ -167,6 +193,25 @@ export const validateMarket = async (marketName) => {
       market: exactMatch,
       suggestions: []
     };
+  }
+  
+  // Check for alternate names
+  const alternateName = MARKET_ALTERNATE_NAMES[marketName.toLowerCase()];
+  if (alternateName) {
+    const alternateMatch = markets.find(
+      m => m.market.toLowerCase() === alternateName.toLowerCase()
+    );
+    
+    if (alternateMatch) {
+      return {
+        exactMatch: true,
+        market: alternateMatch,
+        suggestions: [],
+        usedAlternateName: true,
+        originalName: marketName,
+        matchedName: alternateMatch.market
+      };
+    }
   }
 
   // Fuzzy match - find similar markets
@@ -211,6 +256,28 @@ export const validateMarketWithLocationIntelligence = async (marketName, state =
       strategy: 'exact_match'
     };
   }
+  
+  // Check for alternate names
+  const alternateName = MARKET_ALTERNATE_NAMES[marketName.toLowerCase()];
+  if (alternateName) {
+    const alternateMatch = markets.find(
+      m => m.market.toLowerCase() === alternateName.toLowerCase()
+    );
+    
+    if (alternateMatch) {
+      console.log(`✅ Found alternate name match: ${marketName} → ${alternateMatch.market}`);
+      return {
+        exactMatch: true,
+        market: alternateMatch,
+        spellingsSuggestions: [],
+        nearbySuggestions: [],
+        strategy: 'exact_match',
+        usedAlternateName: true,
+        originalName: marketName,
+        matchedName: alternateMatch.market
+      };
+    }
+  }
 
   // No exact match - use Gemini to determine strategy
   let locationValidation = null;
@@ -223,12 +290,24 @@ export const validateMarketWithLocationIntelligence = async (marketName, state =
     }
   }
 
-  // Get fuzzy spelling suggestions
+  // Get fuzzy spelling suggestions (including alternate names)
   const spellingSuggestions = markets
-    .map(m => ({
-      ...m,
-      similarity: calculateSimilarity(marketName.toLowerCase(), m.market.toLowerCase())
-    }))
+    .map(m => {
+      // Calculate similarity with market name
+      let similarity = calculateSimilarity(marketName.toLowerCase(), m.market.toLowerCase());
+      
+      // Also check if this market has an alternate name that matches better
+      const marketAlternate = Object.entries(MARKET_ALTERNATE_NAMES)
+        .find(([key, value]) => m.market.toLowerCase() === key || m.market.toLowerCase() === value);
+      
+      if (marketAlternate) {
+        const altSimilarity = calculateSimilarity(marketName.toLowerCase(), 
+          m.market.toLowerCase() === marketAlternate[0] ? marketAlternate[1] : marketAlternate[0]);
+        similarity = Math.max(similarity, altSimilarity);
+      }
+      
+      return { ...m, similarity };
+    })
     .filter(m => m.similarity > 0.5)
     .sort((a, b) => b.similarity - a.similarity)
     .slice(0, 5);
@@ -269,14 +348,26 @@ export const validateMarketWithLocationIntelligence = async (marketName, state =
 
   // Determine strategy
   let strategy = 'fuzzy_match'; // default
+  
+  // Special case: Check if the market name might be a district name
+  // If there's a high-confidence fuzzy match (>70%), prefer fuzzy over "both"
+  const hasHighConfidenceMatch = spellingSuggestions.some(s => s.similarity > 0.7);
+  
   if (locationValidation) {
-    strategy = locationValidation.strategy;
+    // Override Gemini's "both" strategy if we have high-confidence fuzzy matches
+    if (locationValidation.strategy === 'both' && hasHighConfidenceMatch) {
+      strategy = 'fuzzy_match';
+      console.log('📍 Overriding "both" strategy to "fuzzy_match" due to high-confidence matches');
+    } else {
+      strategy = locationValidation.strategy;
+    }
   } else if (spellingSuggestions.length > 0 && nearbySuggestions.length === 0) {
     strategy = 'fuzzy_match';
   } else if (nearbySuggestions.length > 0 && spellingSuggestions.length === 0) {
     strategy = 'nearby_markets';
   } else if (spellingSuggestions.length > 0 && nearbySuggestions.length > 0) {
-    strategy = 'both';
+    // Only use "both" if no high-confidence matches exist
+    strategy = hasHighConfidenceMatch ? 'fuzzy_match' : 'both';
   }
 
   return {
