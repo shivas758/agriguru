@@ -271,6 +271,62 @@ class HistoricalPriceService {
   }
 
   /**
+   * Get prices for a date range (for intelligent query handler)
+   */
+  async getPricesForDateRange(params, startDate, endDate) {
+    console.log(`📅 Fetching prices for date range: ${startDate} to ${endDate}`);
+    
+    const allData = [];
+    const currentDate = new Date(startDate);
+    const endDateObj = new Date(endDate);
+    
+    // Limit to reasonable number of days to avoid too many API calls
+    const maxDays = 30;
+    let daysProcessed = 0;
+    
+    // Iterate through each date in the range
+    while (currentDate <= endDateObj && daysProcessed < maxDays) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      
+      try {
+        // Fetch from API with skipDateFilter for historical data
+        const apiParams = { ...params, date: this.formatDateForAPI(dateStr) };
+        const apiResult = await marketPriceAPI.fetchMarketPrices(apiParams, { skipDateFilter: true });
+        
+        if (apiResult.success && apiResult.data.length > 0) {
+          allData.push(...apiResult.data);
+        }
+      } catch (error) {
+        console.error(`Error fetching data for ${dateStr}:`, error);
+      }
+      
+      // Move to next date
+      currentDate.setDate(currentDate.getDate() + 1);
+      daysProcessed++;
+    }
+    
+    // Remove duplicates based on commodity, market, and date
+    const uniqueData = [];
+    const seen = new Set();
+    
+    allData.forEach(item => {
+      const key = `${item.commodity}-${item.market}-${item.arrival_date}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueData.push(item);
+      }
+    });
+    
+    return {
+      success: uniqueData.length > 0,
+      data: uniqueData,
+      dateRange: { start: startDate, end: endDate },
+      totalDays: daysProcessed,
+      recordsFound: uniqueData.length
+    };
+  }
+
+  /**
    * Main method to handle historical queries intelligently
    */
   async getHistoricalPrices(params, dateStr) {

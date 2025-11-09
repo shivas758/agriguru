@@ -163,20 +163,17 @@ class MasterTableService {
    */
   async getNearbyMarketsWithCoords(latitude, longitude, limit = 10, maxDistance = 150) {
     try {
-      const params = { 
-        latitude, 
-        longitude, 
+      // Use Supabase direct query instead of backend API
+      const supabaseDirect = (await import('./supabaseDirect')).default;
+      
+      const nearbyMarkets = await supabaseDirect.getNearbyMarkets(
+        latitude,
+        longitude,
         limit,
         maxDistance
-      };
+      );
       
-      const response = await axios.get(`${BACKEND_URL}/api/master/markets/nearby`, { params });
-      
-      if (response.data.success) {
-        return response.data.data || [];
-      }
-      
-      return [];
+      return nearbyMarkets || [];
     } catch (error) {
       console.error('Error fetching nearby markets with coords:', error);
       return [];

@@ -204,14 +204,18 @@ IMPORTANT PARSING RULES:
 - "market prices of X" means X is the market name, same as "X market prices"
 - "market prices" without any location means user wants local market prices based on their location
 - If no specific market is mentioned, set market as null
+- If query mentions multiple states or asks for "all markets" across states, mark as uncertain for intelligent handling
+- If query asks for date ranges like "last week", "past 7 days", "daily prices", mark as uncertain
+- If query asks to "compare" prices between locations, mark as uncertain
 
 FIRST, categorize the query into ONE of these categories:
 1. "weather" - Questions about weather, climate, rainfall, temperature, forecast (today, tomorrow, this week, etc.)
 2. "non_agriculture" - Questions completely unrelated to agriculture/farming (sports, politics, movies, etc.)
 3. "general_agriculture" - Agriculture-related questions but NOT about market prices (farming techniques, crop diseases, soil health, irrigation, best practices, etc.)
-4. "price_trend" - Asking about price changes, trends, increases, decreases over time (this week, last week, month, etc.)
-5. "price_inquiry" - Asking for specific commodity price
-6. "market_overview" - Asking for all/multiple commodity prices in a market
+4. "nearby_markets" - Asking for markets near a location (e.g., "markets near X", "nearby markets to X", "markets around X")
+5. "price_trend" - Asking about price changes, trends, increases, decreases over time (this week, last week, month, etc.)
+6. "price_inquiry" - Asking for specific commodity price
+7. "market_overview" - Asking for all/multiple commodity prices in a market
 
 Then return ONLY a JSON object based on the category:
 
@@ -256,6 +260,24 @@ FOR GENERAL AGRICULTURE QUERIES:
   "needsDisambiguation": false
 }
 
+FOR NEARBY MARKETS QUERIES:
+{
+  "queryType": "nearby_markets",
+  "commodity": null,
+  "location": {
+    "market": "reference location name (the place user wants to find markets near), OR null if asking for 'near me'/'nearby me'",
+    "district": "district name - INFER from location if possible, OR null if 'near me'",
+    "state": "state name - INFER from location if possible, OR null if 'near me'"
+  },
+  "date": null,
+  "needsDisambiguation": false,
+  "searchRadius": 100
+}
+
+IMPORTANT FOR NEARBY MARKETS:
+- If user says "near me", "nearby me", "around me", "close to me" → set ALL location fields to null (app will use GPS)
+- If user specifies a location like "near holagunda" → set market: "Holagunda" and infer district/state
+
 FOR PRICE TREND QUERIES (price_trend):
 {
   "commodity": "exact commodity name as user mentioned, OR null if asking for market-wide trends",
@@ -268,6 +290,15 @@ FOR PRICE TREND QUERIES (price_trend):
   "queryType": "price_trend",
   "timePeriod": "week, month, or days - extract from query",
   "needsDisambiguation": false
+}
+
+FOR UNCERTAIN/COMPLEX QUERIES (that don't clearly match above patterns):
+{
+  "queryType": "uncertain",
+  "originalQuery": "the full query text",
+  "possibleIntent": "best guess at what user wants",
+  "shouldUseIntelligentHandler": true,
+  "confidence": 0.0-0.5
 }
 
 FOR MARKET PRICE QUERIES (price_inquiry or market_overview):
@@ -320,6 +351,14 @@ EXAMPLES:
 - "How to control pest in tomato plants?" → queryType: "general_agriculture"
 - "Best time to sow wheat?" → queryType: "general_agriculture"
 - "What are the benefits of organic farming?" → queryType: "general_agriculture"
+- "markets near me" → queryType: "nearby_markets", market: null, district: null, state: null, searchRadius: 100
+- "nearby markets" → queryType: "nearby_markets", market: null, district: null, state: null, searchRadius: 100
+- "markets around me" → queryType: "nearby_markets", market: null, district: null, state: null, searchRadius: 100
+- "markets near holagunda" → queryType: "nearby_markets", market: "Holagunda", district: "Ballari", state: "Karnataka", searchRadius: 100
+- "what are the markets near to holagunda" → queryType: "nearby_markets", market: "Holagunda", district: "Ballari", state: "Karnataka", searchRadius: 100
+- "nearby markets to Adoni" → queryType: "nearby_markets", market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", searchRadius: 100
+- "markets around Bangalore" → queryType: "nearby_markets", market: "Bangalore", district: "Bangalore Urban", state: "Karnataka", searchRadius: 100
+- "show me markets close to Hyderabad" → queryType: "nearby_markets", market: "Hyderabad", state: "Telangana", searchRadius: 100
 - "how much has cotton price changed in adoni this week?" → commodity: "cotton", market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", queryType: "price_trend", timePeriod: "week"
 - "price trends in bangalore market" → commodity: null, market: "Bangalore", district: "Bangalore Urban", state: "Karnataka", queryType: "price_trend", timePeriod: "month"
 - "tomato price in Adoni" → commodity: "tomato", market: "Adoni", district: "Kurnool", state: "Andhra Pradesh", queryType: "price_inquiry", isHistoricalQuery: false
@@ -338,6 +377,13 @@ EXAMPLES:
 - "Andhra Pradesh market prices" → commodity: null, market: null, district: null, state: "Andhra Pradesh", queryType: "market_overview", isHistoricalQuery: false, isDistrictQuery: false, isStateQuery: true
 - "cotton prices in AP" → commodity: "cotton", market: null, district: null, state: "Andhra Pradesh", queryType: "price_inquiry", isHistoricalQuery: false, isDistrictQuery: false, isStateQuery: true
 - "prices in Telangana" → commodity: null, market: null, district: null, state: "Telangana", queryType: "market_overview", isHistoricalQuery: false, isDistrictQuery: false, isStateQuery: true
+
+COMPLEX QUERIES (should return queryType: "uncertain"):
+- "daily prices for the last week in all cotton markets in Andhra Pradesh and Karnataka" → queryType: "uncertain", shouldUseIntelligentHandler: true
+- "show me all vegetable prices across Maharashtra markets" → queryType: "uncertain", shouldUseIntelligentHandler: true
+- "compare onion prices between Gujarat and Maharashtra" → queryType: "uncertain", shouldUseIntelligentHandler: true
+- "all markets in Karnataka and Tamil Nadu with tomato prices" → queryType: "uncertain", shouldUseIntelligentHandler: true
+- "rice prices for last 7 days in all major markets" → queryType: "uncertain", shouldUseIntelligentHandler: true
 
 CRITICAL FOR MARKET PRICE QUERIES:
 - Infer district and state from market/city names using your geography knowledge
@@ -414,13 +460,15 @@ JSON:`;
           console.log(`🌾 Crop aliases for "${intent.commodity}":`, aliases);
         }
         
-        // Track the query for analytics
-        await masterTableService.trackQuery(
-          intent.commodity,
-          intent.location.market,
-          intent.location.state,
-          intent.location.district
-        );
+        // Track the query for analytics (only if location exists)
+        if (intent.location) {
+          await masterTableService.trackQuery(
+            intent.commodity,
+            intent.location.market,
+            intent.location.state,
+            intent.location.district
+          );
+        }
         
         // DEBUG: Commented for production
         console.log('Parsed intent from Gemini with validation:', intent);

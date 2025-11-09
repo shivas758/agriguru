@@ -14,6 +14,7 @@ import priceTrendService from './services/priceTrendService';
 import marketSuggestionService from './services/marketSuggestionService';
 import historicalPriceService from './services/historicalPriceService';
 import locationService from './services/locationService';
+import intelligentQueryHandler from './services/intelligentQueryHandler';
 
 function App() {
   const [messages, setMessages] = useState([]);
@@ -265,10 +266,92 @@ function App() {
         return;
       }
 
-      // Extract intent from query
+      // Check if this is a complex query that needs intelligent handling
+      if (intelligentQueryHandler.shouldHandleQuery(text)) {
+        console.log('🧠 Complex query detected, using intelligent handler...');
+        
+        const intelligentResult = await intelligentQueryHandler.handleComplexQuery(text, queryLanguage);
+        
+        if (intelligentResult) {
+          // Check if request was aborted
+          if (isAborted()) {
+            console.log('🛑 Request aborted, skipping intelligent query results');
+            return;
+          }
+          
+          // Show the intelligent response (whether success or not)
+          const botMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: intelligentResult.response || 'Here are the results for your query:',
+            timestamp: new Date(),
+            language: queryLanguage,
+            priceData: intelligentResult.data && intelligentResult.data.length > 0 ? intelligentResult.data.slice(0, 50) : null,
+            isComplexQuery: true,
+            complexQueryInfo: {
+              queriesExecuted: intelligentResult.queriesExecuted,
+              totalRecords: intelligentResult.totalRecords,
+              intent: intelligentResult.parsedIntent
+            },
+            responseTime: getResponseTime()
+          };
+          
+          setMessages(prev => [...prev, botMessage]);
+          
+          if (voiceEnabled && isVoice) {
+            voiceService.speak(botMessage.text, queryLanguage);
+          }
+          
+          setIsLoading(false);
+          return;
+        }
+      }
+      
+      // Extract intent from query (standard flow for non-complex queries)
       const intent = await geminiService.extractQueryIntent(text, queryLanguage);
       // DEBUG: Commented for performance
       console.log('Extracted intent:', JSON.stringify(intent, null, 2));
+      
+      // If Gemini is uncertain about the query, use intelligent handler
+      if (intent.queryType === 'uncertain' || intent.shouldUseIntelligentHandler) {
+        console.log('🤔 Uncertain query detected, using intelligent handler...');
+        
+        const intelligentResult = await intelligentQueryHandler.handleComplexQuery(text, queryLanguage);
+        
+        if (intelligentResult) {
+          // Check if request was aborted
+          if (isAborted()) {
+            console.log('🛑 Request aborted, skipping intelligent query results');
+            return;
+          }
+          
+          // Show the intelligent response (whether success or not)
+          const botMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: intelligentResult.response || 'Here are the results for your query:',
+            timestamp: new Date(),
+            language: queryLanguage,
+            priceData: intelligentResult.data && intelligentResult.data.length > 0 ? intelligentResult.data.slice(0, 50) : null,
+            isComplexQuery: true,
+            complexQueryInfo: {
+              queriesExecuted: intelligentResult.queriesExecuted,
+              totalRecords: intelligentResult.totalRecords,
+              intent: intelligentResult.parsedIntent
+            },
+            responseTime: getResponseTime()
+          };
+          
+          setMessages(prev => [...prev, botMessage]);
+          
+          if (voiceEnabled && isVoice) {
+            voiceService.speak(botMessage.text, queryLanguage);
+          }
+          
+          setIsLoading(false);
+          return;
+        }
+      }
       
       // Check if master table validation found spelling mistakes and needs clarification
       if (intent.needsDisambiguation && intent.suggestions) {
@@ -499,6 +582,159 @@ function App() {
         
         if (voiceEnabled && isVoice) {
           voiceService.speak(answer, queryLanguage);
+        }
+        
+        setIsLoading(false);
+        return;
+      }
+      
+      // Handle nearby markets queries
+      if (intent.queryType === 'nearby_markets') {
+        console.log('🗺️ Nearby markets query detected, finding markets near:', intent.location.market);
+        
+        // Use location service to find nearby markets (up to 100km)
+        const searchRadius = intent.searchRadius || 100;
+        const referenceLocation = intent.location.market || intent.location.district || intent.location.state;
+        
+        try {
+          let nearbyMarkets = [];
+          
+          // If no reference location (e.g., "markets near me"), use user's GPS location
+          if (!referenceLocation) {
+            console.log('📍 No reference location, using user GPS coordinates...');
+            
+            // Get current GPS position
+            let currentPosition = locationService.getCurrentPosition();
+            
+            if (!currentPosition || !currentPosition.latitude || !currentPosition.longitude) {
+              // Request location permission if not already granted
+              const locationResult = await locationService.requestLocationPermission();
+              
+              if (!locationResult.success) {
+                const errorText = queryLanguage === 'hi'
+                  ? 'कृपया अपने आस-पास के बाजार खोजने के लिए स्थान की अनुमति दें।'
+                  : 'Please enable location permission to find markets near you.';
+                
+                const botMessage = {
+                  id: Date.now() + 1,
+                  type: 'bot',
+                  text: errorText,
+                  timestamp: new Date(),
+                  language: queryLanguage,
+                  responseTime: getResponseTime()
+                };
+                
+                setMessages(prev => [...prev, botMessage]);
+                
+                if (voiceEnabled && isVoice) {
+                  voiceService.speak(errorText, queryLanguage);
+                }
+                
+                setIsLoading(false);
+                return;
+              }
+              
+              // Update user location and get position
+              setUserLocation(locationResult.locationDetails);
+              currentPosition = locationResult.position;
+            }
+            
+            // Use Gemini to find markets near GPS coordinates
+            if (currentPosition && currentPosition.latitude && currentPosition.longitude) {
+              console.log(`📍 Using GPS coordinates: ${currentPosition.latitude}, ${currentPosition.longitude}`);
+              nearbyMarkets = await locationService.findMarketsNearGPS(
+                currentPosition.latitude,
+                currentPosition.longitude,
+                searchRadius,
+                20 // limit
+              );
+            }
+          } else {
+            // Use reference location with Gemini's geographical knowledge
+            nearbyMarkets = await locationService.findNearbyMarkets(
+              referenceLocation,
+              searchRadius,
+              20 // limit
+            );
+          }
+          
+          // Check if request was aborted
+          if (isAborted()) {
+            console.log('🛑 Request aborted, skipping nearby markets');
+            return;
+          }
+          
+          if (nearbyMarkets && nearbyMarkets.length > 0) {
+            const locationName = referenceLocation || (queryLanguage === 'hi' ? 'आपके स्थान' : 'your location');
+            const responseText = queryLanguage === 'hi'
+              ? `${locationName} के पास ${nearbyMarkets.length} बाजार मिले (${searchRadius} किमी के भीतर):`
+              : `Found ${nearbyMarkets.length} markets near ${locationName} (within ${searchRadius} km):`;
+            
+            const botMessage = {
+              id: Date.now() + 1,
+              type: 'bot',
+              text: responseText,
+              timestamp: new Date(),
+              language: queryLanguage,
+              suggestions: nearbyMarkets.map(market => ({
+                type: 'market',
+                value: market.market,
+                display: `${market.market} (${market.district}, ${market.state}) - ${Math.round(market.distance || 0)} km`,
+                market: market.market,
+                district: market.district,
+                state: market.state,
+                distance: market.distance
+              })),
+              responseTime: getResponseTime()
+            };
+            
+            setMessages(prev => [...prev, botMessage]);
+            
+            if (voiceEnabled && isVoice) {
+              voiceService.speak(responseText, queryLanguage);
+            }
+          } else {
+            const locationName = referenceLocation || (queryLanguage === 'hi' ? 'आपके स्थान' : 'your location');
+            const noMarketsText = queryLanguage === 'hi'
+              ? `क्षमा करें, ${locationName} के पास ${searchRadius} किमी के भीतर कोई बाजार नहीं मिला।`
+              : `Sorry, I couldn't find any markets near ${locationName} within ${searchRadius} km.`;
+            
+            const botMessage = {
+              id: Date.now() + 1,
+              type: 'bot',
+              text: noMarketsText,
+              timestamp: new Date(),
+              language: queryLanguage,
+              responseTime: getResponseTime()
+            };
+            
+            setMessages(prev => [...prev, botMessage]);
+            
+            if (voiceEnabled && isVoice) {
+              voiceService.speak(noMarketsText, queryLanguage);
+            }
+          }
+        } catch (error) {
+          console.error('Error finding nearby markets:', error);
+          
+          const errorText = queryLanguage === 'hi'
+            ? `क्षमा करें, पास के बाजार खोजने में समस्या हुई। कृपया फिर से प्रयास करें।`
+            : `Sorry, I encountered an error finding nearby markets. Please try again.`;
+          
+          const botMessage = {
+            id: Date.now() + 1,
+            type: 'bot',
+            text: errorText,
+            timestamp: new Date(),
+            language: queryLanguage,
+            responseTime: getResponseTime()
+          };
+          
+          setMessages(prev => [...prev, botMessage]);
+          
+          if (voiceEnabled && isVoice) {
+            voiceService.speak(errorText, queryLanguage);
+          }
         }
         
         setIsLoading(false);
@@ -887,29 +1123,30 @@ function App() {
         }
         
         try {
-          // Get user location details (district, state)
-          const position = await locationService.getCurrentPosition();
+          // Use the GPS-based nearby markets feature
+          const position = locationService.getCurrentPosition();
           
-          if (position) {
-            // Use district-based search directly (simpler, faster, no coordinates needed)
-            console.log(`📍 User location: ${position.district}, ${position.state}`);
-            console.log('🔍 Searching markets in user\'s district...');
+          if (position && position.latitude && position.longitude) {
+            console.log(`📍 User GPS: ${position.latitude}, ${position.longitude}`);
+            console.log('🔍 Finding nearby markets using Gemini...');
             
-            const districtMarkets = await supabaseDirect.getMarketsInDistrict(
-              position.district,
-              position.state,
-              10
+            // Use Gemini to find nearby markets
+            const nearbyMarkets = await locationService.findMarketsNearGPS(
+              position.latitude,
+              position.longitude,
+              100, // 100 km radius
+              10 // top 10 nearest markets
             );
             
             const locationResult = {
-              success: districtMarkets.length > 0,
-              markets: districtMarkets.map(m => ({ ...m, distance: null })),
+              success: nearbyMarkets.length > 0,
+              markets: nearbyMarkets,
               userLocation: position,
-              searchMethod: 'district'
+              searchMethod: 'gps'
             };
             
             if (locationResult.success) {
-              console.log(`✅ Found ${districtMarkets.length} markets in ${position.district} district`);
+              console.log(`✅ Found ${nearbyMarkets.length} nearby markets`);
             }
           
           if (locationResult.success && locationResult.markets.length > 0) {
@@ -1070,6 +1307,82 @@ function App() {
         // Case 2: State-wide commodity query (e.g., "cotton prices in Andhra Pradesh")
         // Will be handled below - fetch prices from all markets in the state
         console.log(`State-wide commodity query: ${intent.commodity} in ${intent.location.state}`);
+      }
+      
+      // 🌍 LOCATION-BASED PRICE QUERY: If user has location but didn't specify a market,
+      // use Gemini to find nearby markets and show prices from them
+      if (!intent.location.market && !isDistrictQuery && !isStateQuery && userLocation) {
+        console.log('📍 No market specified, but user has location. Finding nearby market prices...');
+        
+        const currentPosition = locationService.getCurrentPosition();
+        if (currentPosition && currentPosition.latitude && currentPosition.longitude) {
+          try {
+            // Get nearby markets using Gemini
+            const nearbyMarkets = await locationService.findMarketsNearGPS(
+              currentPosition.latitude,
+              currentPosition.longitude,
+              100, // 100 km radius
+              5 // top 5 nearest markets
+            );
+            
+            if (nearbyMarkets && nearbyMarkets.length > 0) {
+              console.log(`📍 Found ${nearbyMarkets.length} nearby markets, fetching prices...`);
+              
+              // Fetch prices from each nearby market
+              const allPrices = [];
+              for (const market of nearbyMarkets) {
+                try {
+                  const marketPrices = await supabaseDirect.getLatestPrices({
+                    market: market.market,
+                    district: market.district,
+                    state: market.state,
+                    commodity: intent.commodity, // can be null for all commodities
+                    limit: 20
+                  });
+                  
+                  if (marketPrices && marketPrices.length > 0) {
+                    allPrices.push(...marketPrices);
+                  }
+                } catch (error) {
+                  console.error(`Error fetching prices for ${market.market}:`, error);
+                }
+              }
+              
+              if (allPrices.length > 0) {
+                // Format and show prices
+                const formattedPrices = supabaseDirect.formatPriceData(allPrices);
+                
+                const locationText = queryLanguage === 'hi'
+                  ? `आपके आस-पास के बाजारों में ${intent.commodity || 'सभी वस्तुओं'} की कीमतें:`
+                  : `Prices ${intent.commodity ? 'for ' + intent.commodity : 'from markets'} near you:`;
+                
+                const botMessage = {
+                  id: Date.now() + 1,
+                  type: 'bot',
+                  text: locationText,
+                  timestamp: new Date(),
+                  language: queryLanguage,
+                  priceData: formattedPrices.slice(0, 50),
+                  nearbyMarkets: nearbyMarkets,
+                  isLocationBased: true,
+                  responseTime: getResponseTime()
+                };
+                
+                setMessages(prev => [...prev, botMessage]);
+                
+                if (voiceEnabled && isVoice) {
+                  voiceService.speak(locationText, queryLanguage);
+                }
+                
+                setIsLoading(false);
+                return; // Exit early, we've shown nearby market prices
+              }
+            }
+          } catch (error) {
+            console.error('Error fetching nearby market prices:', error);
+            // Continue with normal query flow
+          }
+        }
       }
       
       // Fetch market prices based on intent
