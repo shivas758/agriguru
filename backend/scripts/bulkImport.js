@@ -4,9 +4,10 @@
  * Bulk Import Script
  * 
  * Usage:
- *   node scripts/bulkImport.js                    # Import last 60 days
- *   node scripts/bulkImport.js --days 30          # Import last 30 days
- *   node scripts/bulkImport.js --start 2024-10-01 --end 2024-10-31  # Import specific range
+ *   node scripts/bulkImport.js                    # Import last 180 days (6 months)
+ *   node scripts/bulkImport.js --days 90          # Import last 90 days (3 months)
+ *   node scripts/bulkImport.js --days 30          # Import last 30 days (1 month)
+ *   node scripts/bulkImport.js --start 2024-05-10 --end 2024-11-10  # Import specific range
  *   node scripts/bulkImport.js --commodities "Onion,Potato,Tomato" --days 30
  */
 
@@ -69,8 +70,8 @@ async function main() {
         options.endDate
       );
     } else {
-      // Import last N days (default: 60)
-      const days = options.days || 60;
+      // Import last N days (default: 180 for 6 months)
+      const days = options.days || 180;
       logger.info(`Importing last ${days} days`);
       result = await bulkImportService.importLastNDays(days);
     }
@@ -141,7 +142,7 @@ function printHelp() {
 Usage: node scripts/bulkImport.js [options]
 
 Options:
-  --days, -d <number>           Number of days to import (default: 60)
+  --days, -d <number>           Number of days to import (default: 180 = 6 months)
   --start, -s <date>            Start date (YYYY-MM-DD)
   --end, -e <date>              End date (YYYY-MM-DD)
   --commodities, -c <list>      Comma-separated list of commodities
@@ -149,20 +150,33 @@ Options:
   --help, -h                    Show this help message
 
 Examples:
-  # Import last 60 days (default)
+  # Import last 180 days / 6 months (default - recommended for new setup)
   node scripts/bulkImport.js
 
-  # Import last 30 days
+  # Import last 90 days / 3 months
+  node scripts/bulkImport.js --days 90
+
+  # Import last 30 days / 1 month
   node scripts/bulkImport.js --days 30
 
-  # Import specific date range
-  node scripts/bulkImport.js --start 2024-10-01 --end 2024-10-31
+  # Import specific date range (6 months: May 10 to Nov 10, 2024)
+  node scripts/bulkImport.js --start 2024-05-10 --end 2024-11-10
+
+  # Import specific date range (1 year)
+  node scripts/bulkImport.js --start 2023-11-10 --end 2024-11-10
 
   # Import specific commodities for last 30 days
   node scripts/bulkImport.js --commodities "Onion,Potato,Tomato" --days 30
 
-  # Resume failed import
-  node scripts/bulkImport.js --resume --start 2024-10-01 --end 2024-10-31
+  # Resume failed import (useful if process was interrupted)
+  node scripts/bulkImport.js --resume --start 2024-05-10 --end 2024-11-10
+
+Performance Notes:
+  - Each day takes ~10-15 seconds to fetch and process
+  - 180 days (6 months) = ~25-40 minutes total
+  - 90 days (3 months) = ~12-20 minutes total
+  - Script shows progress and can be resumed if interrupted
+  - Data is automatically deduplicated (safe to run multiple times)
   `);
 }
 

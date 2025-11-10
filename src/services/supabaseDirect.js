@@ -119,6 +119,7 @@ export const getLastAvailablePrice = async (params) => {
 export const getMarkets = async (limit = 1000) => {
   if (!supabase) throw new Error('Supabase not configured');
 
+  // Try markets_master first (new schema)
   const { data, error } = await supabase
     .from('markets_master')
     .select('*')
@@ -126,7 +127,43 @@ export const getMarkets = async (limit = 1000) => {
     .order('market')
     .limit(limit);
   
-  if (error) throw error;
+  if (error) {
+    console.warn('Error querying markets_master, trying market_prices:', error.message);
+  }
+  
+  // If markets_master is empty or error, fallback to market_prices
+  if (!data || data.length === 0) {
+    console.log('⚠️ markets_master is empty, falling back to market_prices');
+    
+    const { data: priceData, error: priceError } = await supabase
+      .from('market_prices')
+      .select('market, district, state')
+      .order('market')
+      .limit(limit);
+    
+    if (priceError) throw priceError;
+    
+    // Get unique markets from market_prices
+    const uniqueMarkets = [];
+    const seen = new Set();
+    
+    for (const row of (priceData || [])) {
+      const key = `${row.market}|${row.district}|${row.state}`.toLowerCase();
+      if (!seen.has(key)) {
+        seen.add(key);
+        uniqueMarkets.push({
+          market: row.market,
+          district: row.district,
+          state: row.state,
+          is_active: true
+        });
+      }
+    }
+    
+    console.log(`✅ Found ${uniqueMarkets.length} unique markets from market_prices`);
+    return uniqueMarkets;
+  }
+  
   return data || [];
 };
 
@@ -136,6 +173,7 @@ export const getMarkets = async (limit = 1000) => {
 export const getCommodities = async (limit = 1000) => {
   if (!supabase) throw new Error('Supabase not configured');
 
+  // Try commodities_master first (new schema)
   const { data, error } = await supabase
     .from('commodities_master')
     .select('*')
@@ -143,7 +181,35 @@ export const getCommodities = async (limit = 1000) => {
     .order('commodity_name')
     .limit(limit);
   
-  if (error) throw error;
+  if (error) {
+    console.warn('Error querying commodities_master, trying market_prices:', error.message);
+  }
+  
+  // If commodities_master is empty or error, fallback to market_prices
+  if (!data || data.length === 0) {
+    console.log('⚠️ commodities_master is empty, falling back to market_prices');
+    
+    const { data: priceData, error: priceError } = await supabase
+      .from('market_prices')
+      .select('commodity')
+      .order('commodity')
+      .limit(limit);
+    
+    if (priceError) throw priceError;
+    
+    // Get unique commodities
+    const uniqueCommodities = [...new Set((priceData || []).map(row => row.commodity))]
+      .filter(c => c)
+      .map(commodity => ({
+        commodity_name: commodity,
+        is_active: true,
+        is_popular: false
+      }));
+    
+    console.log(`✅ Found ${uniqueCommodities.length} unique commodities from market_prices`);
+    return uniqueCommodities;
+  }
+  
   return data || [];
 };
 
