@@ -15,13 +15,14 @@ import marketSuggestionService from './services/marketSuggestionService';
 import historicalPriceService from './services/historicalPriceService';
 import locationService from './services/locationService';
 import intelligentQueryHandler from './services/intelligentQueryHandler';
+import { useTranslation } from './hooks/useTranslation';
 
 function App() {
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [selectedLanguage, setSelectedLanguage] = useState('hi');
+  const [selectedLanguage, setSelectedLanguage] = useState('en');
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [error, setError] = useState('');
   const [showSettings, setShowSettings] = useState(false);
@@ -35,15 +36,16 @@ function App() {
   const chatContainerRef = useRef(null);
 
   const availableLanguages = voiceService.getSupportedLanguages();
+  const { t } = useTranslation(selectedLanguage);
 
   useEffect(() => {
-    // Initialize with welcome message
+    // Initialize with welcome message in selected language
     const welcomeMessage = {
       id: Date.now(),
       type: 'bot',
-      text: 'Hi! I am AgriGuru, your agricultural market price assistant. Ask me about market prices of any crop in any location across India. You can type or use voice input in multiple languages.',
+      text: t('welcomeMessage'),
       timestamp: new Date(),
-      language: 'en'
+      language: selectedLanguage
     };
     setMessages([welcomeMessage]);
 
@@ -63,7 +65,7 @@ function App() {
     } else {
       console.warn('⚠️ Direct mode not available - check environment variables');
     }
-  }, []);
+  }, [selectedLanguage]);
   
   // Check location status
   const checkLocationStatus = async () => {
@@ -120,9 +122,9 @@ function App() {
     const stopMessage = {
       id: Date.now(),
       type: 'bot',
-      text: 'Generation stopped by user.',
+      text: t('stopped'),
       timestamp: new Date(),
-      language: 'en'
+      language: selectedLanguage
     };
     
     setMessages(prev => [...prev, stopMessage]);
@@ -2017,13 +2019,14 @@ function App() {
       }
       
       console.error('Error processing message:', error);
-      setError('Failed to process your request. Please try again.');
+      setError(t('requestFailed'));
       
       const errorMessage = {
         id: Date.now() + 3,
         type: 'bot',
-        text: 'Sorry, I encountered an error. Please check your API keys and try again.',
+        text: t('error'),
         timestamp: new Date(),
+        language: selectedLanguage,
         isError: true
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -2279,7 +2282,7 @@ function App() {
       
     } catch (error) {
       console.error('Error handling market selection:', error);
-      setError('Failed to fetch market prices. Please try again.');
+      setError(t('requestFailed'));
     } finally {
       setIsLoading(false);
     }
@@ -2295,23 +2298,23 @@ function App() {
               <div className="w-7 h-7 rounded-md bg-primary-600 flex items-center justify-center">
                 <TrendingUp className="w-4 h-4 text-white" />
               </div>
-              <h1 className="text-base font-semibold text-gray-900">AgriGuru</h1>
+              <h1 className="text-base font-semibold text-gray-900">{t('appName')}</h1>
               
               {/* Location Indicator */}
               {locationStatus === 'enabled' && userLocation && (
                 <div className="hidden sm:flex items-center gap-1 text-xs text-gray-600 ml-2 px-2 py-1 bg-green-50 rounded-md border border-green-200">
                   <MapPin className="w-3 h-3 text-green-600" />
-                  <span className="font-medium">{userLocation.district || userLocation.city || 'Location enabled'}</span>
+                  <span className="font-medium">{userLocation.district || userLocation.city || t('locationEnabled')}</span>
                 </div>
               )}
               {locationStatus === 'disabled' && (
                 <button
                   onClick={checkLocationStatus}
                   className="hidden sm:flex items-center gap-1 text-xs text-gray-500 ml-2 px-2 py-1 bg-gray-50 rounded-md border border-gray-200 hover:bg-gray-100 transition-colors"
-                  title="Click to enable location for nearby market prices"
+                  title={t('enableLocation')}
                 >
                   <MapPin className="w-3 h-3" />
-                  <span>Enable location</span>
+                  <span>{t('enableLocation')}</span>
                 </button>
               )}
             </div>
@@ -2381,15 +2384,15 @@ function App() {
               <div className="flex items-center gap-3 text-gray-500 pt-1">
                 <div className="flex items-center gap-2">
                   <Loader2 className="w-4 h-4 animate-spin" />
-                  <span className="text-sm">Thinking...</span>
+                  <span className="text-sm">{t('thinking')}</span>
                 </div>
                 <button
                   onClick={handleStopGeneration}
                   className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg border border-red-200 transition-colors text-xs font-medium"
-                  title="Stop generation"
+                  title={t('stop')}
                 >
                   <StopCircle className="w-3.5 h-3.5" />
-                  <span>Stop</span>
+                  <span>{t('stop')}</span>
                 </button>
               </div>
             </div>
@@ -2441,7 +2444,7 @@ function App() {
                 onChange={(e) => setInputText(e.target.value)}
                 onKeyPress={handleKeyPress}
                 disabled={isLoading || isRecording}
-                placeholder={isRecording ? "Listening..." : "Message AgriGuru..."}
+                placeholder={isRecording ? t('recordingPlaceholder') : t('typePlaceholder')}
                 rows="1"
                 className="w-full px-3 py-2.5 pr-20 border border-gray-300 rounded-xl focus:outline-none focus:border-gray-400 disabled:bg-gray-50 disabled:text-gray-400 resize-none max-h-32 text-sm shadow-sm"
                 style={{ minHeight: '44px', lineHeight: '1.5' }}
