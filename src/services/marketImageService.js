@@ -84,34 +84,39 @@ class MarketImageService {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
 
-    // Table dimensions - Portrait layout for mobile with 2x resolution for sharpness
+    // Logical dimensions (unscaled) for drawing
     const scale = 2; // High resolution multiplier
-    const rowHeight = 90 * scale;
-    const headerRowHeight = 70 * scale;
-    const titleHeight = 110 * scale;
-    const footerHeight = 45 * scale;
-    const canvasWidth = 600 * scale;  // Portrait width for mobile at 2x resolution
-    const canvasHeight = titleHeight + headerRowHeight + (priceData.length * rowHeight) + footerHeight;
+    const logicalWidth = 600; // Portrait width for mobile
+    const rowHeight = 90;
+    const headerRowHeight = 70;
+    const titleHeight = 110;
+    const footerHeight = 45;
+
+    // Backing store dimensions (scaled for sharpness)
+    const canvasWidth = logicalWidth * scale;
+    const canvasHeight = (titleHeight + headerRowHeight + (priceData.length * rowHeight) + footerHeight) * scale;
 
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
     
-    // Scale context for high resolution
+    // Scale context for high resolution; all subsequent drawing uses logical units
     ctx.scale(scale, scale);
+
+    const logicalHeight = canvasHeight / scale;
 
     // Background - white
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+    ctx.fillRect(0, 0, logicalWidth, logicalHeight);
 
-    // Draw title section (pass unscaled width)
-    await this.drawTitleSection(ctx, marketInfo, canvasWidth, isHistorical, priceData, t);
+    // Draw title section (use logical width so text centering is correct)
+    await this.drawTitleSection(ctx, marketInfo, logicalWidth, isHistorical, priceData, t);
     
     // Draw table
     const tableY = titleHeight;
-    await this.drawTable(ctx, priceData, tableY, canvasWidth, isHistorical, t);
+    await this.drawTable(ctx, priceData, tableY, logicalWidth, isHistorical, t);
 
-    // Footer (pass unscaled values)
-    this.drawFooter(ctx, (canvasHeight - footerHeight) / scale, canvasWidth / scale, canvasHeight / scale, pageNumber, totalPages);
+    // Footer (use logical coordinates)
+    this.drawFooter(ctx, logicalHeight - footerHeight, logicalWidth, logicalHeight, pageNumber, totalPages);
 
     // Convert canvas to image
     return canvas.toDataURL('image/png');
