@@ -7,6 +7,7 @@
 import commodityImageService from './commodityImageService';
 import imageCacheService from './imageCacheService';
 import { formatPrice } from '../utils/formatPrice';
+import { getTranslation } from '../config/translations';
 
 class MarketImageService {
   constructor() {
@@ -23,7 +24,7 @@ class MarketImageService {
    * @param {boolean} isHistorical - Whether this is historical data
    * @returns {Promise<Array>} - Array of Base64 image data URLs
    */
-  async generateMarketPriceImages(priceData, marketInfo = {}, itemsPerPage = 12, isHistorical = false) {
+  async generateMarketPriceImages(priceData, marketInfo = {}, itemsPerPage = 12, isHistorical = false, language = 'en') {
     if (!priceData || priceData.length === 0) {
       throw new Error('No price data available to generate image');
     }
@@ -54,7 +55,8 @@ class MarketImageService {
         marketInfo, 
         pageIndex + 1, 
         pages.length,
-        isHistorical
+        isHistorical,
+        language
       );
       images.push(imageUrl);
     }
@@ -76,7 +78,8 @@ class MarketImageService {
    * @param {boolean} isHistorical - Whether this is historical data
    * @returns {Promise<string>} - Base64 image data URL
    */
-  async generateSinglePageImage(priceData, marketInfo = {}, pageNumber = 1, totalPages = 1, isHistorical = false) {
+  async generateSinglePageImage(priceData, marketInfo = {}, pageNumber = 1, totalPages = 1, isHistorical = false, language = 'en') {
+    const t = (key) => getTranslation(language, key);
     // Create canvas
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
@@ -101,11 +104,11 @@ class MarketImageService {
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
     // Draw title section (pass unscaled width)
-    await this.drawTitleSection(ctx, marketInfo, canvasWidth / scale, isHistorical, priceData);
-
-    // Draw table (pass unscaled values)
-    const tableY = titleHeight / scale;
-    await this.drawTable(ctx, priceData, tableY, canvasWidth / scale, isHistorical);
+    await this.drawTitleSection(ctx, marketInfo, canvasWidth, isHistorical, priceData, t);
+    
+    // Draw table
+    const tableY = titleHeight;
+    await this.drawTable(ctx, priceData, tableY, canvasWidth, isHistorical, t);
 
     // Footer (pass unscaled values)
     this.drawFooter(ctx, (canvasHeight - footerHeight) / scale, canvasWidth / scale, canvasHeight / scale, pageNumber, totalPages);
@@ -117,7 +120,7 @@ class MarketImageService {
   /**
    * Draw title section with market name and date
    */
-  async drawTitleSection(ctx, marketInfo, canvasWidth, isHistorical = false, priceData = []) {
+  async drawTitleSection(ctx, marketInfo, canvasWidth, isHistorical = false, priceData = [], t = (key) => key) {
     const padding = 30;
     
     // Draw person image on the left - aligned with table edge
@@ -135,13 +138,15 @@ class MarketImageService {
     ctx.fillStyle = '#dc2626';
     ctx.font = 'bold 24px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`${marketName} Market Price Board`, canvasWidth / 2, 40);
+    ctx.fillText(`${marketName} ${t('marketPriceBoard')}`, canvasWidth / 2, 40);
 
     // Current date
     const today = new Date();
     const day = today.getDate();
-    const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-                       'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const monthNames = [
+      t('monthJan'), t('monthFeb'), t('monthMar'), t('monthApr'), t('monthMay'), t('monthJun'),
+      t('monthJul'), t('monthAug'), t('monthSep'), t('monthOct'), t('monthNov'), t('monthDec')
+    ];
     const month = monthNames[today.getMonth()];
     const year = today.getFullYear();
     
@@ -174,7 +179,7 @@ class MarketImageService {
         const mostRecent = new Date(Math.max(...dates));
         const lastDay = mostRecent.getDate();
         const lastMonth = monthNames[mostRecent.getMonth()];
-        lastUpdatedText = `(Last Updated On ${lastDay} ${lastMonth})`;
+        lastUpdatedText = `(${t('lastUpdatedOn')} ${lastDay} ${lastMonth})`;
       }
     }
     
@@ -189,7 +194,7 @@ class MarketImageService {
   /**
    * Draw table with commodity prices
    */
-  async drawTable(ctx, priceData, startY, canvasWidth, isHistorical = false) {
+  async drawTable(ctx, priceData, startY, canvasWidth, isHistorical = false, t = (key) => key) {
     const padding = 30;
     const tableWidth = canvasWidth - (padding * 2);
     const tableX = padding;
@@ -234,30 +239,30 @@ class MarketImageService {
     ctx.fillStyle = '#ffffff';
     ctx.font = 'bold 16px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText('Commodity', currentX + nameColWidth / 2, currentY + 30);
-    ctx.fillText('Name', currentX + nameColWidth / 2, currentY + 50);
+    ctx.fillText(t('commodity'), currentX + nameColWidth / 2, currentY + 30);
+    ctx.fillText(t('commodityName').split(' ')[1] || '', currentX + nameColWidth / 2, currentY + 50);
     currentX += nameColWidth;
     
     // Min Price header
     ctx.strokeStyle = '#ffffff';
     ctx.strokeRect(currentX, currentY, minColWidth, headerRowHeight);
     ctx.fillStyle = '#ffffff';
-    ctx.fillText('Minimum', currentX + minColWidth / 2, currentY + 30);
-    ctx.fillText('Price', currentX + minColWidth / 2, currentY + 50);
+    ctx.fillText(t('min'), currentX + minColWidth / 2, currentY + 30);
+    ctx.fillText(t('priceMovement').includes(t('priceMovement')) ? 'Price' : '', currentX + minColWidth / 2, currentY + 50);
     currentX += minColWidth;
     
     // Modal Price header
     ctx.strokeRect(currentX, currentY, modalColWidth, headerRowHeight);
     ctx.fillStyle = '#ffffff';
-    ctx.fillText('Modal', currentX + modalColWidth / 2, currentY + 30);
-    ctx.fillText('Price', currentX + modalColWidth / 2, currentY + 50);
+    ctx.fillText(t('modal'), currentX + modalColWidth / 2, currentY + 30);
+    ctx.fillText('', currentX + modalColWidth / 2, currentY + 50);
     currentX += modalColWidth;
     
     // Max Price header
     ctx.strokeRect(currentX, currentY, maxColWidth, headerRowHeight);
     ctx.fillStyle = '#ffffff';
-    ctx.fillText('Maximum', currentX + maxColWidth / 2, currentY + 30);
-    ctx.fillText('Price', currentX + maxColWidth / 2, currentY + 50);
+    ctx.fillText(t('max'), currentX + maxColWidth / 2, currentY + 30);
+    ctx.fillText('', currentX + maxColWidth / 2, currentY + 50);
     
     currentY += headerRowHeight;
     

@@ -124,7 +124,7 @@ const PriceCard = memo(({ price, isNearbyResult, isHistorical }) => {
   );
 });
 
-const ChatMessage = ({ message, onSpeak, onSelectMarket }) => {
+const ChatMessage = ({ message, onSpeak, onSelectMarket, language = 'en' }) => {
   const isUser = message.type === 'user';
   const isNearbyResult = message.isNearbyResult;
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
@@ -159,7 +159,8 @@ const ChatMessage = ({ message, onSpeak, onSelectMarket }) => {
         message.fullPriceData,
         message.marketInfo || {},
         12, // itemsPerPage
-        message.isHistoricalData || false // Pass historical flag
+        message.isHistoricalData || false, // Pass historical flag
+        language // Pass language for translations
       );
       
       setGeneratedImages(imageDataUrls);
@@ -196,12 +197,14 @@ const ChatMessage = ({ message, onSpeak, onSelectMarket }) => {
                 forecastData={message.forecastData}
                 location={message.weatherLocation}
                 numberOfDays={message.numberOfDays || 7}
+                language={language}
               />
             ) : (
               <WeatherCard 
                 weatherInfo={message.text} 
                 location={message.weatherLocation}
                 query={message.weatherQuery}
+                language={language}
               />
             )}
             <div className="flex items-center gap-1 mt-2">
@@ -270,6 +273,7 @@ const ChatMessage = ({ message, onSpeak, onSelectMarket }) => {
                 // TODO: Implement backend fetch for selected days
                 // For now, this is UI-only
               }}
+              language={language}
             />
           </div>
         ) : null}
@@ -281,6 +285,7 @@ const ChatMessage = ({ message, onSpeak, onSelectMarket }) => {
               trendsData={message.trendsData}
               marketInfo={message.marketInfo || {}}
               trendQueryParams={message.trendQueryParams}
+              language={language}
             />
           </div>
         ) : null}

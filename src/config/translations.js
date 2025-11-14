@@ -13,6 +13,100 @@ export const translations = {
     enableLocation: 'Enable location',
     error: 'Sorry, I encountered an error. Please check your API keys and try again.',
     requestFailed: 'Failed to process your request. Please try again.',
+    
+    // Market Trend Card
+    priceTrends: 'Price Trends',
+    commodities: 'commodities',
+    lastDays: 'Last 30 days',
+    download: 'Download',
+    generating: 'Generating...',
+    commodity: 'Commodity',
+    old: 'Old',
+    new: 'New',
+    change: 'Change',
+    days: 'Days',
+    
+    // Price Trend Card
+    priceTrendAnalysis: 'Price Trend Analysis',
+    selectTimePeriod: 'Select Time Period:',
+    currentModalPrice: 'Current Modal Price',
+    perQuintal: 'per Quintal',
+    asOf: 'as of',
+    priceChange: 'Price Change',
+    percentageChange: 'Percentage Change',
+    over: 'over',
+    days_: 'days',
+    was: 'Was',
+    on: 'on',
+    from: 'From:',
+    to: 'To:',
+    averagePrice: 'Average Price',
+    volatility: 'Volatility',
+    peakPrice: 'Peak Price',
+    lowestPrice: 'Lowest Price',
+    highPriceVolatility: 'High Price Volatility',
+    highVolatilityWarning: 'Prices are fluctuating significantly. Consider market conditions before trading.',
+    currentPriceRange: 'Current Price Range',
+    min: 'Min',
+    modal: 'Modal',
+    max: 'Max',
+    priceMovement: 'Price Movement',
+    
+    // Weather Card
+    rainfallForecast: 'Rainfall Forecast',
+    chanceOfRain: 'Chance of Rain',
+    probability: 'Probability',
+    high: 'High',
+    moderate: 'Moderate',
+    low: 'Low',
+    veryLow: 'Very Low',
+    expectedThroughoutDay: 'Expected Throughout Day',
+    morning: 'Morning',
+    afternoon: 'Afternoon',
+    evening: 'Evening',
+    farmingAdvice: 'Farming Advice',
+    highRainAdvice: 'High chance of rain. Postpone irrigation and pesticide spraying.',
+    moderateRainAdvice: 'Moderate rain chance. Plan field activities carefully.',
+    lowRainAdvice: 'Low rain chance. Good for most farming activities.',
+    veryLowRainAdvice: 'Very low rain chance. Ideal for irrigation and spraying.',
+    
+    // Weather Forecast 7-Day
+    dayWeatherForecast: '-Day Weather Forecast',
+    nextDays: 'Next',
+    day: 'Day',
+    rainyExpected: 'Rainy',
+    expected: 'Expected',
+    mixedWeather: 'Mixed Weather',
+    partlyCloudy: 'Partly Cloudy',
+    dryAhead: 'Dry',
+    ahead: 'Ahead',
+    heavyRainfallAdvice: 'Heavy rainfall expected in the coming',
+    heavyRainfallAdvice2: 'days. Postpone major field activities and ensure proper drainage.',
+    variableWeatherAdvice: 'Variable weather conditions. Plan activities around drier days.',
+    favorableWeatherAdvice: 'Generally favorable weather. Good for most farming activities.',
+    dryConditionsAdvice: 'Dry conditions expected. Ensure adequate irrigation for crops.',
+    avgRainfall: 'Avg. Rainfall:',
+    today: 'Today',
+    rainProbability: 'Rain Probability',
+    temp: 'Temp',
+    humidity: 'Humidity',
+    wind: 'Wind',
+    weeklyRainfallPattern: 'Weekly Rainfall Pattern',
+    weeklyPlanningAdvice: 'Weekly Planning Advice',
+    week: 'Week',
+    period: 'Period',
+    
+    // Market Image Labels
+    marketPriceBoard: 'Market Price Board',
+    lastUpdatedOn: 'Last Updated On',
+    commodityName: 'Commodity Name',
+    minimumPrice: 'Minimum Price',
+    modalPrice: 'Modal Price',
+    maximumPrice: 'Maximum Price',
+    pageOf: 'Page',
+    of: 'of',
+    monthJan: 'Jan', monthFeb: 'Feb', monthMar: 'Mar', monthApr: 'Apr', monthMay: 'May', monthJun: 'Jun',
+    monthJul: 'Jul', monthAug: 'Aug', monthSep: 'Sep', monthOct: 'Oct', monthNov: 'Nov', monthDec: 'Dec',
   },
   hi: {
     appName: 'एग्रीगुरु',
@@ -26,6 +120,100 @@ export const translations = {
     enableLocation: 'स्थान सक्षम करें',
     error: 'क्षमा करें, एक त्रुटि हुई। कृपया अपनी API कुंजी जांचें और पुनः प्रयास करें।',
     requestFailed: 'आपके अनुरोध को संसाधित करने में विफल। कृपया पुन: प्रयास करें।',
+    
+    // Market Trend Card
+    priceTrends: 'मूल्य रुझान',
+    commodities: 'वस्तुएं',
+    lastDays: 'पिछले 30 दिन',
+    download: 'डाउनलोड',
+    generating: 'तैयार हो रहा है...',
+    commodity: 'वस्तु',
+    old: 'पुराना',
+    new: 'नया',
+    change: 'बदलाव',
+    days: 'दिन',
+    
+    // Price Trend Card
+    priceTrendAnalysis: 'मूल्य रुझान विश्लेषण',
+    selectTimePeriod: 'समय अवधि चुनें:',
+    currentModalPrice: 'वर्तमान मॉडल मूल्य',
+    perQuintal: 'प्रति क्विंटल',
+    asOf: 'के अनुसार',
+    priceChange: 'मूल्य परिवर्तन',
+    percentageChange: 'प्रतिशत परिवर्तन',
+    over: 'में',
+    days_: 'दिनों',
+    was: 'था',
+    on: 'को',
+    from: 'से:',
+    to: 'तक:',
+    averagePrice: 'औसत मूल्य',
+    volatility: 'अस्थिरता',
+    peakPrice: 'उच्चतम मूल्य',
+    lowestPrice: 'न्यूनतम मूल्य',
+    highPriceVolatility: 'उच्च मूल्य अस्थिरता',
+    highVolatilityWarning: 'कीमतें महत्वपूर्ण रूप से उतार-चढ़ाव कर रही हैं। व्यापार से पहले बाजार की स्थिति पर विचार करें।',
+    currentPriceRange: 'वर्तमान मूल्य सीमा',
+    min: 'न्यूनतम',
+    modal: 'मॉडल',
+    max: 'अधिकतम',
+    priceMovement: 'मूल्य गति',
+    
+    // Weather Card
+    rainfallForecast: 'वर्षा पूर्वानुमान',
+    chanceOfRain: 'बारिश की संभावना',
+    probability: 'संभावना',
+    high: 'उच्च',
+    moderate: 'मध्यम',
+    low: 'कम',
+    veryLow: 'बहुत कम',
+    expectedThroughoutDay: 'दिन भर अपेक्षित',
+    morning: 'सुबह',
+    afternoon: 'दोपहर',
+    evening: 'शाम',
+    farmingAdvice: 'खेती सलाह',
+    highRainAdvice: 'बारिश की अधिक संभावना। सिंचाई और कीटनाशक छिड़काव स्थगित करें।',
+    moderateRainAdvice: 'मध्यम बारिश की संभावना। खेत की गतिविधियों की सावधानी से योजना बनाएं।',
+    lowRainAdvice: 'कम बारिश की संभावना। अधिकांश खेती की गतिविधियों के लिए अच्छा।',
+    veryLowRainAdvice: 'बहुत कम बारिश की संभावना। सिंचाई और छिड़काव के लिए आदर्श।',
+    
+    // Weather Forecast 7-Day
+    dayWeatherForecast: '-दिवसीय मौसम पूर्वानुमान',
+    nextDays: 'अगले',
+    day: 'दिन',
+    rainyExpected: 'बरसाती',
+    expected: 'अपेक्षित',
+    mixedWeather: 'मिश्रित मौसम',
+    partlyCloudy: 'आंशिक रूप से बादल',
+    dryAhead: 'सूखा',
+    ahead: 'आगे',
+    heavyRainfallAdvice: 'आने वाले',
+    heavyRainfallAdvice2: 'दिनों में भारी वर्षा की उम्मीद। प्रमुख खेत गतिविधियों को स्थगित करें और उचित जल निकासी सुनिश्चित करें।',
+    variableWeatherAdvice: 'परिवर्तनशील मौसम की स्थिति। सूखे दिनों में गतिविधियों की योजना बनाएं।',
+    favorableWeatherAdvice: 'आम तौर पर अनुकूल मौसम। अधिकांश खेती की गतिविधियों के लिए अच्छा।',
+    dryConditionsAdvice: 'शुष्क स्थिति की उम्मीद। फसलों के लिए पर्याप्त सिंचाई सुनिश्चित करें।',
+    avgRainfall: 'औसत वर्षा:',
+    today: 'आज',
+    rainProbability: 'बारिश की संभावना',
+    temp: 'तापमान',
+    humidity: 'नमी',
+    wind: 'हवा',
+    weeklyRainfallPattern: 'साप्ताहिक वर्षा पैटर्न',
+    weeklyPlanningAdvice: 'साप्ताहिक योजना सलाह',
+    week: 'सप्ताह',
+    period: 'अवधि',
+    
+    // Market Image Labels
+    marketPriceBoard: 'बाजार मूल्य बोर्ड',
+    lastUpdatedOn: 'अंतिम अपडेट',
+    commodityName: 'वस्तु का नाम',
+    minimumPrice: 'न्यूनतम मूल्य',
+    modalPrice: 'मॉडल मूल्य',
+    maximumPrice: 'अधिकतम मूल्य',
+    pageOf: 'पृष्ठ',
+    of: 'का',
+    monthJan: 'जन', monthFeb: 'फ़र', monthMar: 'मार', monthApr: 'अप्र', monthMay: 'मई', monthJun: 'जून',
+    monthJul: 'जुल', monthAug: 'अग', monthSep: 'सित', monthOct: 'अक्टू', monthNov: 'नव', monthDec: 'दिस',
   },
   ta: {
     appName: 'அக்ரிகுரு',
@@ -39,6 +227,15 @@ export const translations = {
     enableLocation: 'இருப்பிடத்தை இயக்கு',
     error: 'மன்னிக்கவும், ஒரு பிழை ஏற்பட்டது. உங்கள் API விசைகளைச் சரிபார்த்து மீண்டும் முயற்சிக்கவும்.',
     requestFailed: 'உங்கள் கோரிக்கையைச் செயல்படுத்த முடியவில்லை. மீண்டும் முயற்சிக்கவும்.',
+    
+    // Market Trend Card
+    priceTrends: 'விலை போக்குகள்', commodities: 'பொருட்கள்', lastDays: 'கடந்த 30 நாட்கள்', download: 'பதிவிறக்கு', generating: 'உருவாக்குகிறது...', commodity: 'பொருள்', old: 'பழைய', new: 'புதிய', change: 'மாற்றம்', days: 'நாட்கள்',
+    // Price Trend Card
+    priceTrendAnalysis: 'விலை போக்கு பகுப்பாய்வு', selectTimePeriod: 'நேர காலத்தைத் தேர்ந்தெடுக்கவும்:', currentModalPrice: 'தற்போதைய மாடல் விலை', perQuintal: 'ஒரு குவின்டாலுக்கு', asOf: 'படி', priceChange: 'விலை மாற்றம்', percentageChange: 'சதவீத மாற்றம்', over: 'மேல்', days_: 'நாட்கள்', was: 'இருந்தது', on: 'அன்று', from: 'இருந்து:', to: 'வரை:', averagePrice: 'சராசரி விலை', volatility: 'நிலையற்ற தன்மை', peakPrice: 'உச்ச விலை', lowestPrice: 'குறைந்த விலை', highPriceVolatility: 'அதிக விலை ஏற்ற இறக்கம்', highVolatilityWarning: 'விலைகள் கணிசமாக ஏற்ற இறக்கமாக உள்ளன. வர்த்தகம் செய்வதற்கு முன் சந்தை நிலைமைகளைக் கருத்தில் கொள்ளுங்கள்.', currentPriceRange: 'தற்போதைய விலை வரம்பு', min: 'குறைந்தபட்சம்', modal: 'மாடல்', max: 'அதிகபட்சம்', priceMovement: 'விலை நகர்வு',
+    // Weather Card
+    rainfallForecast: 'மழை முன்னறிவிப்பு', chanceOfRain: 'மழை வாய்ப்பு', probability: 'நிகழ்தகவு', high: 'அதிகம்', moderate: 'மிதமான', low: 'குறைவு', veryLow: 'மிகக் குறைவு', expectedThroughoutDay: 'நாள் முழுவதும் எதிர்பார்க்கப்படுகிறது', morning: 'காலை', afternoon: 'மதியம்', evening: 'மாலை', farmingAdvice: 'விவசாய ஆலோசனை', highRainAdvice: 'மழைக்கான அதிக வாய்ப்பு. நீர்ப்பாசனம் மற்றும் பூச்சிக்கொல்லி தெளிப்பை ஒத்திவைக்கவும்.', moderateRainAdvice: 'மிதமான மழை வாய்ப்பு. வயல் நடவடிக்கைகளை கவனமாக திட்டமிடுங்கள்.', lowRainAdvice: 'குறைந்த மழை வாய்ப்பு. பெரும்பாலான விவசாய நடவடிக்கைகளுக்கு நல்லது.', veryLowRainAdvice: 'மிகக் குறைந்த மழை வாய்ப்பு. நீர்ப்பாசனம் மற்றும் தெளிப்புக்கு ஏற்றது.',
+    // Weather Forecast 7-Day
+    dayWeatherForecast: '-நாள் வானிலை முன்னறிவிப்பு', nextDays: 'அடுத்த', day: 'நாள்', rainyExpected: 'மழை', expected: 'எதிர்பார்க்கப்படுகிறது', mixedWeather: 'கலப்பு வானிலை', partlyCloudy: 'பகுதி மேகமூட்டம்', dryAhead: 'வறண்ட', ahead: 'முன்னால்', heavyRainfallAdvice: 'வரும்', heavyRainfallAdvice2: 'நாட்களில் கனமழை எதிர்பார்க்கப்படுகிறது. முக்கிய வயல் நடவடிக்கைகளை ஒத்திவைத்து சரியான வடிகால் உறுதிசெய்யவும்.', variableWeatherAdvice: 'மாறுபட்ட வானிலை நிலைமைகள். வறண்ட நாட்களில் நடவடிக்கைகளைத் திட்டமிடுங்கள்.', favorableWeatherAdvice: 'பொதுவாக சாதகமான வானிலை. பெரும்பாலான விவசாய நடவடிக்கைகளுக்கு நல்லது.', dryConditionsAdvice: 'வறண்ட நிலைமைகள் எதிர்பார்க்கப்படுகின்றன. பயிர்களுக்கு போதுமான நீர்ப்பாசனத்தை உறுதிசெய்யவும்.', avgRainfall: 'சராசரி மழை:', today: 'இன்று', rainProbability: 'மழை நிகழ்தகவு', temp: 'வெப்பம்', humidity: 'ஈரப்பதம்', wind: 'காற்று', weeklyRainfallPattern: 'வாராந்திர மழை வடிவம்', weeklyPlanningAdvice: 'வாராந்திர திட்டமிடல் ஆலோசனை', week: 'வாரம்', period: 'காலம்',
   },
   te: {
     appName: 'అగ్రిగురు',
@@ -52,6 +249,15 @@ export const translations = {
     enableLocation: 'స్థానాన్ని ప్రారంభించండి',
     error: 'క్షమించండి, ఒక లోపం ఎదురైంది. దయచేసి మీ API కీలను తనిఖీ చేసి మళ్లీ ప్రయత్నించండి.',
     requestFailed: 'మీ అభ్యర్థనను ప్రాసెస్ చేయడంలో విఫలమైంది. దయచేసి మళ్లీ ప్రయత్నించండి.',
+    
+    // Market Trend Card
+    priceTrends: 'ధర పోకడలు', commodities: 'వస్తువులు', lastDays: 'గత 30 రోజులు', download: 'డౌన్‌లోడ్', generating: 'రూపొందిస్తోంది...', commodity: 'వస్తువు', old: 'పాత', new: 'కొత్త', change: 'మార్పు', days: 'రోజులు',
+    // Price Trend Card
+    priceTrendAnalysis: 'ధర ధోరణి విశ్లేషణ', selectTimePeriod: 'సమయ వ్యవధిని ఎంచుకోండి:', currentModalPrice: 'ప్రస్తుత మోడల్ ధర', perQuintal: 'ప్రతి క్వింటాల్‌కు', asOf: 'ప్రకారం', priceChange: 'ధర మార్పు', percentageChange: 'శాతం మార్పు', over: 'లో', days_: 'రోజులు', was: 'ఉంది', on: 'నాడు', from: 'నుండి:', to: 'వరకు:', averagePrice: 'సగటు ధర', volatility: 'అస్థిరత', peakPrice: 'గరిష్ట ధర', lowestPrice: 'కనిష్ట ధర', highPriceVolatility: 'అధిక ధర అస్థిరత', highVolatilityWarning: 'ధరలు గణనీయంగా హెచ్చుతగ్గులకు లోనవుతున్నాయి. వ్యాపారం చేయడానికి ముందు మార్కెట్ పరిస్థితులను పరిగణించండి.', currentPriceRange: 'ప్రస్తుత ధర పరిధి', min: 'కనిష్టం', modal: 'మోడల్', max: 'గరిష్టం', priceMovement: 'ధర కదలిక',
+    // Weather Card
+    rainfallForecast: 'వర్షపాతం అంచనా', chanceOfRain: 'వర్షం అవకాశం', probability: 'సంభావ్యత', high: 'అధికం', moderate: 'మధ్యస్థం', low: 'తక్కువ', veryLow: 'చాలా తక్కువ', expectedThroughoutDay: 'రోజంతా ఆశించవచ్చు', morning: 'ఉదయం', afternoon: 'మధ్యాహ్నం', evening: 'సాయంత్రం', farmingAdvice: 'వ్యవసాయ సలహా', highRainAdvice: 'వర్షం అవకాశం ఎక్కువ. నీటిపారుదల మరియు పురుగుమందుల చిలకరణ వాయిదా వేయండి.', moderateRainAdvice: 'మధ్యస్థ వర్షం అవకాశం. పొలం కార్యకలాపాలను జాగ్రత్తగా ప్లాన్ చేయండి.', lowRainAdvice: 'తక్కువ వర్షం అవకాశం. చాలా వ్యవసాయ కార్యకలాపాలకు మంచిది.', veryLowRainAdvice: 'చాలా తక్కువ వర్షం అవకాశం. నీటిపారుదల మరియు చిలకరణకు అనువైనది.',
+    // Weather Forecast 7-Day
+    dayWeatherForecast: '-రోజుల వాతావరణ సూచన', nextDays: 'తదుపరి', day: 'రోజు', rainyExpected: 'వర్షపు', expected: 'ఆశించబడుతోంది', mixedWeather: 'మిశ్రమ వాతావరణం', partlyCloudy: 'పాక్షికంగా మేఘావృతం', dryAhead: 'పొడి', ahead: 'ముందు', heavyRainfallAdvice: 'రాబోయే', heavyRainfallAdvice2: 'రోజులలో భారీ వర్షపాతం ఆశించబడుతోంది. ప్రధాన పొలం కార్యకలాపాలను వాయిదా వేసి సరైన నీటి నిర్గమనం నిర్ధారించండి.', variableWeatherAdvice: 'మారుతూ ఉండే వాతావరణ పరిస్థితులు. పొడి రోజులలో కార్యకలాపాలను ప్లాన్ చేయండి.', favorableWeatherAdvice: 'సాధారణంగా అనుకూల వాతావరణం. చాలా వ్యవసాయ కార్యకలాపాలకు మంచిది.', dryConditionsAdvice: 'పొడి పరిస్థితులు ఆశించబడుతున్నాయి. పంటలకు తగినంత నీటిపారుదల నిర్ధారించండి.', avgRainfall: 'సగటు వర్షపాతం:', today: 'ఈరోజు', rainProbability: 'వర్షం సంభావ్యత', temp: 'ఉష్ణోగ్రత', humidity: 'తేమ', wind: 'గాలి', weeklyRainfallPattern: 'వారపు వర్షపాతం నమూనా', weeklyPlanningAdvice: 'వారపు ప్రణాళిక సలహా', week: 'వారం', period: 'కాలం',
   },
   kn: {
     appName: 'ಅಗ್ರಿಗುರು',
@@ -65,6 +271,15 @@ export const translations = {
     enableLocation: 'ಸ್ಥಳವನ್ನು ಸಕ್ರಿಯಗೊಳಿಸಿ',
     error: 'ಕ್ಷಮಿಸಿ, ದೋಷ ಎದುರಾಗಿದೆ. ದಯವಿಟ್ಟು ನಿಮ್ಮ API ಕೀಗಳನ್ನು ಪರಿಶೀಲಿಸಿ ಮತ್ತು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
     requestFailed: 'ನಿಮ್ಮ ವಿನಂತಿಯನ್ನು ಪ್ರಕ್ರಿಯೆಗೊಳಿಸಲು ವಿಫಲವಾಗಿದೆ. ದಯವಿಟ್ಟು ಮತ್ತೆ ಪ್ರಯತ್ನಿಸಿ.',
+    
+    // Market Trend Card
+    priceTrends: 'ಬೆಲೆ ಪ್ರವೃತ್ತಿಗಳು', commodities: 'ಸರಕುಗಳು', lastDays: 'ಕಳೆದ 30 ದಿನಗಳು', download: 'ಡೌನ್‌ಲೋಡ್', generating: 'ರಚಿಸುತ್ತಿದೆ...', commodity: 'ಸರಕು', old: 'ಹಳೆಯ', new: 'ಹೊಸ', change: 'ಬದಲಾವಣೆ', days: 'ದಿನಗಳು',
+    // Price Trend Card
+    priceTrendAnalysis: 'ಬೆಲೆ ಪ್ರವೃತ್ತಿ ವಿಶ್ಲೇಷಣೆ', selectTimePeriod: 'ಸಮಯ ಅವಧಿಯನ್ನು ಆಯ್ಕೆಮಾಡಿ:', currentModalPrice: 'ಪ್ರಸ್ತುತ ಮೋಡಲ್ ಬೆಲೆ', perQuintal: 'ಪ್ರತಿ ಕ್ವಿಂಟಾಲ್‌ಗೆ', asOf: 'ಪ್ರಕಾರ', priceChange: 'ಬೆಲೆ ಬದಲಾವಣೆ', percentageChange: 'ಶೇಕಡಾ ಬದಲಾವಣೆ', over: 'ಮೇಲೆ', days_: 'ದಿನಗಳು', was: 'ಇತ್ತು', on: 'ರಂದು', from: 'ನಿಂದ:', to: 'ತನಕ:', averagePrice: 'ಸರಾಸರಿ ಬೆಲೆ', volatility: 'ಅಸ್ಥಿರತೆ', peakPrice: 'ಗರಿಷ್ಠ ಬೆಲೆ', lowestPrice: 'ಕನಿಷ್ಠ ಬೆಲೆ', highPriceVolatility: 'ಹೆಚ್ಚಿನ ಬೆಲೆ ಅಸ್ಥಿರತೆ', highVolatilityWarning: 'ಬೆಲೆಗಳು ಗಮನಾರ್ಹವಾಗಿ ಏರಿಳಿತಗೊಳ್ಳುತ್ತಿವೆ. ವ್ಯಾಪಾರ ಮಾಡುವ ಮೊದಲು ಮಾರುಕಟ್ಟೆ ಪರಿಸ್ಥಿತಿಗಳನ್ನು ಪರಿಗಣಿಸಿ.', currentPriceRange: 'ಪ್ರಸ್ತುತ ಬೆಲೆ ವ್ಯಾಪ್ತಿ', min: 'ಕನಿಷ್ಠ', modal: 'ಮೋಡಲ್', max: 'ಗರಿಷ್ಠ', priceMovement: 'ಬೆಲೆ ಚಲನೆ',
+    // Weather Card
+    rainfallForecast: 'ಮಳೆ ಮುನ್ಸೂಚನೆ', chanceOfRain: 'ಮಳೆಯ ಸಾಧ್ಯತೆ', probability: 'ಸಂಭವನೀಯತೆ', high: 'ಹೆಚ್ಚು', moderate: 'ಮಧ್ಯಮ', low: 'ಕಡಿಮೆ', veryLow: 'ಬಹಳ ಕಡಿಮೆ', expectedThroughoutDay: 'ದಿನವಿಡೀ ನಿರೀಕ್ಷಿತ', morning: 'ಬೆಳಿಗ್ಗೆ', afternoon: 'ಮಧ್ಯಾಹ್ನ', evening: 'ಸಂಜೆ', farmingAdvice: 'ಕೃಷಿ ಸಲಹೆ', highRainAdvice: 'ಮಳೆಯ ಹೆಚ್ಚಿನ ಸಾಧ್ಯತೆ. ನೀರಾವರಿ ಮತ್ತು ಕೀಟನಾಶಕ ಸಿಂಪಡಿಸುವುದನ್ನು ಮುಂದೂಡಿ.', moderateRainAdvice: 'ಮಧ್ಯಮ ಮಳೆ ಸಾಧ್ಯತೆ. ಹೊಲದ ಚಟುವಟಿಕೆಗಳನ್ನು ಎಚ್ಚರಿಕೆಯಿಂದ ಯೋಜಿಸಿ.', lowRainAdvice: 'ಕಡಿಮೆ ಮಳೆ ಸಾಧ್ಯತೆ. ಹೆಚ್ಚಿನ ಕೃಷಿ ಚಟುವಟಿಕೆಗಳಿಗೆ ಉತ್ತಮ.', veryLowRainAdvice: 'ಬಹಳ ಕಡಿಮೆ ಮಳೆ ಸಾಧ್ಯತೆ. ನೀರಾವರಿ ಮತ್ತು ಸಿಂಪಡಿಸುವಿಕೆಗೆ ಸೂಕ್ತ.',
+    // Weather Forecast 7-Day
+    dayWeatherForecast: '-ದಿನಗಳ ಹವಾಮಾನ ಮುನ್ಸೂಚನೆ', nextDays: 'ಮುಂದಿನ', day: 'ದಿನ', rainyExpected: 'ಮಳೆ', expected: 'ನಿರೀಕ್ಷಿತ', mixedWeather: 'ಮಿಶ್ರ ಹವಾಮಾನ', partlyCloudy: 'ಭಾಗಶಃ ಮೋಡ', dryAhead: 'ಶುಷ್ಕ', ahead: 'ಮುಂದೆ', heavyRainfallAdvice: 'ಮುಂದಿನ', heavyRainfallAdvice2: 'ದಿನಗಳಲ್ಲಿ ಭಾರೀ ಮಳೆ ನಿರೀಕ್ಷಿತ. ಪ್ರಮುಖ ಹೊಲ ಚಟುವಟಿಕೆಗಳನ್ನು ಮುಂದೂಡಿ ಮತ್ತು ಸರಿಯಾದ ಒಳಚರಂಡಿ ಖಚಿತಪಡಿಸಿಕೊಳ್ಳಿ.', variableWeatherAdvice: 'ವೇರಿಯಬಲ್ ಹವಾಮಾನ ಪರಿಸ್ಥಿತಿಗಳು. ಶುಷ್ಕ ದಿನಗಳಲ್ಲಿ ಚಟುವಟಿಕೆಗಳನ್ನು ಯೋಜಿಸಿ.', favorableWeatherAdvice: 'ಸಾಮಾನ್ಯವಾಗಿ ಅನುಕೂಲಕರ ಹವಾಮಾನ. ಹೆಚ್ಚಿನ ಕೃಷಿ ಚಟುವಟಿಕೆಗಳಿಗೆ ಉತ್ತಮ.', dryConditionsAdvice: 'ಶುಷ್ಕ ಪರಿಸ್ಥಿತಿಗಳು ನಿರೀಕ್ಷಿತ. ಬೆಳೆಗಳಿಗೆ ಸಾಕಷ್ಟು ನೀರಾವರಿ ಖಚಿತಪಡಿಸಿಕೊಳ್ಳಿ.', avgRainfall: 'ಸರಾಸರಿ ಮಳೆ:', today: 'ಇಂದು', rainProbability: 'ಮಳೆ ಸಂಭವನೀಯತೆ', temp: 'ತಾಪಮಾನ', humidity: 'ತೇವಾಂಶ', wind: 'ಗಾಳಿ', weeklyRainfallPattern: 'ವಾರದ ಮಳೆ ಮಾದರಿ', weeklyPlanningAdvice: 'ವಾರದ ಯೋಜನೆ ಸಲಹೆ', week: 'ವಾರ', period: 'ಅವಧಿ',
   },
   ml: {
     appName: 'അഗ്രിഗുരു',
@@ -78,6 +293,15 @@ export const translations = {
     enableLocation: 'ലൊക്കേഷൻ പ്രാപ്തമാക്കുക',
     error: 'ക്ഷമിക്കണം, ഒരു പിശക് സംഭവിച്ചു. നിങ്ങളുടെ API കീകൾ പരിശോധിച്ച് വീണ്ടും ശ്രമിക്കുക.',
     requestFailed: 'നിങ്ങളുടെ അഭ്യർത്ഥന പ്രോസസ്സ് ചെയ്യുന്നതിൽ പരാജയപ്പെട്ടു. ദയവായി വീണ്ടും ശ്രമിക്കുക.',
+    
+    // Market Trend Card
+    priceTrends: 'വില പ്രവണതകൾ', commodities: 'ചരക്കുകൾ', lastDays: 'കഴിഞ്ഞ 30 ദിവസങ്ങൾ', download: 'ഡൗൺലോഡ്', generating: 'സൃഷ്ടിക്കുന്നു...', commodity: 'ചരക്ക്', old: 'പഴയത്', new: 'പുതിയത്', change: 'മാറ്റം', days: 'ദിവസങ്ങൾ',
+    // Price Trend Card
+    priceTrendAnalysis: 'വില പ്രവണത വിശകലനം', selectTimePeriod: 'സമയ കാലയളവ് തിരഞ്ഞെടുക്കുക:', currentModalPrice: 'നിലവിലെ മോഡൽ വില', perQuintal: 'ഒരു ക്വിന്റലിന്', asOf: 'പ്രകാരം', priceChange: 'വില മാറ്റം', percentageChange: 'ശതമാനം മാറ്റം', over: 'കഴിഞ്ഞ', days_: 'ദിവസങ്ങൾ', was: 'ആയിരുന്നു', on: 'ന്', from: 'മുതൽ:', to: 'വരെ:', averagePrice: 'ശരാശരി വില', volatility: 'അസ്ഥിരത', peakPrice: 'ഏറ്റവും ഉയർന്ന വില', lowestPrice: 'ഏറ്റവും കുറഞ്ഞ വില', highPriceVolatility: 'ഉയർന്ന വില അസ്ഥിരത', highVolatilityWarning: 'വിലകൾ ഗണ്യമായി ഏറ്റക്കുറച്ചിലുകൾ കാണുന്നു. വ്യാപാരത്തിന് മുമ്പ് വിപണി സാഹചര്യങ്ങൾ പരിഗണിക്കുക.', currentPriceRange: 'നിലവിലെ വില പരിധി', min: 'കുറഞ്ഞത്', modal: 'മോഡൽ', max: 'കൂടുതൽ', priceMovement: 'വില ചലനം',
+    // Weather Card
+    rainfallForecast: 'മഴ പ്രവചനം', chanceOfRain: 'മഴയുടെ സാധ്യത', probability: 'സംഭാവ്യത', high: 'ഉയർന്നത്', moderate: 'മിതമായ', low: 'കുറവ്', veryLow: 'വളരെ കുറവ്', expectedThroughoutDay: 'ദിവസം മുഴുവൻ പ്രതീക്ഷിക്കുന്നു', morning: 'രാവിലെ', afternoon: 'ഉച്ചയ്ക്ക്', evening: 'വൈകുന്നേരം', farmingAdvice: 'കൃഷി ഉപദേശം', highRainAdvice: 'മഴയുടെ ഉയർന്ന സാധ്യത. ജലസേചനവും കീടനാശിനി തളിക്കലും മാറ്റിവയ്ക്കുക.', moderateRainAdvice: 'മിതമായ മഴ സാധ്യത. വയൽ പ്രവർത്തനങ്ങൾ ശ്രദ്ധാപൂർവം ആസൂത്രണം ചെയ്യുക.', lowRainAdvice: 'കുറഞ്ഞ മഴ സാധ്യത. മിക്ക കാർഷിക പ്രവർത്തനങ്ങൾക്കും നല്ലത്.', veryLowRainAdvice: 'വളരെ കുറഞ്ഞ മഴ സാധ്യത. ജലസേചനത്തിനും തളിക്കലിനും അനുയോജ്യം.',
+    // Weather Forecast 7-Day
+    dayWeatherForecast: '-ദിവസ കാലാവസ്ഥാ പ്രവചനം', nextDays: 'അടുത്ത', day: 'ദിവസം', rainyExpected: 'മഴ', expected: 'പ്രതീക്ഷിക്കുന്നു', mixedWeather: 'മിശ്ര കാലാവസ്ഥ', partlyCloudy: 'ഭാഗികമായി മേഘാവൃതം', dryAhead: 'വരണ്ട', ahead: 'മുന്നോട്ട്', heavyRainfallAdvice: 'വരാനിരിക്കുന്ന', heavyRainfallAdvice2: 'ദിവസങ്ങളിൽ കനത്ത മഴ പ്രതീക്ഷിക്കുന്നു. പ്രധാന വയൽ പ്രവർത്തനങ്ങൾ മാറ്റിവയ്ക്കുകയും ശരിയായ ഡ്രെയിനേജ് ഉറപ്പാക്കുകയും ചെയ്യുക.', variableWeatherAdvice: 'വേരിയബിൾ കാലാവസ്ഥാ സാഹചര്യങ്ങൾ. ഉണങ്ങിയ ദിവസങ്ങളിൽ പ്രവർത്തനങ്ങൾ ആസൂത്രണം ചെയ്യുക.', favorableWeatherAdvice: 'പൊതുവെ അനുകൂലമായ കാലാവസ്ഥ. മിക്ക കാർഷിക പ്രവർത്തനങ്ങൾക്കും നല്ലത്.', dryConditionsAdvice: 'വരണ്ട സാഹചര്യങ്ങൾ പ്രതീക്ഷിക്കുന്നു. വിളകൾക്ക് മതിയായ ജലസേചനം ഉറപ്പാക്കുക.', avgRainfall: 'ശരാശരി മഴ:', today: 'ഇന്ന്', rainProbability: 'മഴ സാധ്യത', temp: 'താപനില', humidity: 'ആർദ്രത', wind: 'കാറ്റ്', weeklyRainfallPattern: 'പ്രതിവാര മഴ പാറ്റേൺ', weeklyPlanningAdvice: 'പ്രതിവാര ആസൂത്രണ ഉപദേശം', week: 'ആഴ്ച', period: 'കാലയളവ്',
   },
   mr: {
     appName: 'एग्रीगुरू',
@@ -91,6 +315,15 @@ export const translations = {
     enableLocation: 'स्थान सक्षम करा',
     error: 'क्षमस्व, त्रुटी आली. कृपया आपल्या API की तपासा आणि पुन्हा प्रयत्न करा.',
     requestFailed: 'तुमची विनंती प्रक्रिया करण्यात अयशस्वी. कृपया पुन्हा प्रयत्न करा.',
+    
+    // Market Trend Card
+    priceTrends: 'किंमत ट्रेंड', commodities: 'वस्तू', lastDays: 'मागील 30 दिवस', download: 'डाउनलोड', generating: 'तयार करत आहे...', commodity: 'वस्तू', old: 'जुने', new: 'नवीन', change: 'बदल', days: 'दिवस',
+    // Price Trend Card
+    priceTrendAnalysis: 'किंमत ट्रेंड विश्लेषण', selectTimePeriod: 'कालावधी निवडा:', currentModalPrice: 'सध्याची मोडल किंमत', perQuintal: 'प्रति क्विंटल', asOf: 'प्रमाणे', priceChange: 'किंमत बदल', percentageChange: 'टक्केवारी बदल', over: 'च्या', days_: 'दिवस', was: 'होती', on: 'रोजी', from: 'पासून:', to: 'पर्यंत:', averagePrice: 'सरासरी किंमत', volatility: 'अस्थिरता', peakPrice: 'सर्वोच्च किंमत', lowestPrice: 'सर्वात कमी किंमत', highPriceVolatility: 'उच्च किंमत अस्थिरता', highVolatilityWarning: 'किमती लक्षणीयरीत्या चढ-उतार करत आहेत. व्यापार करण्यापूर्वी बाजार परिस्थिती विचारात घ्या.', currentPriceRange: 'सध्याची किंमत श्रेणी', min: 'किमान', modal: 'मोडल', max: 'कमाल', priceMovement: 'किंमत हालचाल',
+    // Weather Card
+    rainfallForecast: 'पाऊस अंदाज', chanceOfRain: 'पावसाची शक्यता', probability: 'संभाव्यता', high: 'उच्च', moderate: 'मध्यम', low: 'कमी', veryLow: 'खूप कमी', expectedThroughoutDay: 'दिवसभर अपेक्षित', morning: 'सकाळ', afternoon: 'दुपार', evening: 'संध्याकाळ', farmingAdvice: 'शेती सल्ला', highRainAdvice: 'पावसाची उच्च शक्यता. पाणीपुरवठा आणि कीटकनाशक फवारणी पुढे ढकला.', moderateRainAdvice: 'मध्यम पाऊस शक्यता. शेत क्रियाकलाप काळजीपूर्वक नियोजन करा.', lowRainAdvice: 'कमी पाऊस शक्यता. बहुतेक शेती क्रियाकलापांसाठी चांगले.', veryLowRainAdvice: 'खूप कमी पाऊस शक्यता. पाणीपुरवठा आणि फवारणीसाठी योग्य.',
+    // Weather Forecast 7-Day
+    dayWeatherForecast: '-दिवसांचा हवामान अंदाज', nextDays: 'पुढील', day: 'दिवस', rainyExpected: 'पावसाळी', expected: 'अपेक्षित', mixedWeather: 'मिश्र हवामान', partlyCloudy: 'अंशतः ढगाळ', dryAhead: 'कोरडे', ahead: 'पुढे', heavyRainfallAdvice: 'येत्या', heavyRainfallAdvice2: 'दिवसांत मुसळधार पाऊस अपेक्षित. प्रमुख शेत क्रियाकलाप पुढे ढकला आणि योग्य निचरा सुनिश्चित करा.', variableWeatherAdvice: 'बदलत्या हवामान परिस्थिती. कोरड्या दिवसांमध्ये क्रियाकलापांचे नियोजन करा.', favorableWeatherAdvice: 'सामान्यतः अनुकूल हवामान. बहुतेक शेती क्रियाकलापांसाठी चांगले.', dryConditionsAdvice: 'कोरडी परिस्थिती अपेक्षित. पिकांसाठी पुरेसा पाणीपुरवठा सुनिश्चित करा.', avgRainfall: 'सरासरी पाऊस:', today: 'आज', rainProbability: 'पाऊस संभाव्यता', temp: 'तापमान', humidity: 'आर्द्रता', wind: 'वारा', weeklyRainfallPattern: 'साप्ताहिक पाऊस नमुना', weeklyPlanningAdvice: 'साप्ताहिक नियोजन सल्ला', week: 'आठवडा', period: 'कालावधी',
   },
   gu: {
     appName: 'એગ્રીગુરુ',
@@ -104,6 +337,15 @@ export const translations = {
     enableLocation: 'સ્થાન સક્ષમ કરો',
     error: 'માફ કરશો, એક ભૂલ આવી. કૃપા કરીને તમારી API કીઓ તપાસો અને ફરીથી પ્રયાસ કરો.',
     requestFailed: 'તમારી વિનંતીને પ્રોસેસ કરવામાં નિષ્ફળ. કૃપા કરીને ફરીથી પ્રયાસ કરો.',
+    
+    // Market Trend Card
+    priceTrends: 'ભાવ વલણો', commodities: 'કોમોડિટીઝ', lastDays: 'છેલ્લા 30 દિવસ', download: 'ડાઉનલોડ', generating: 'બનાવી રહ્યા છીએ...', commodity: 'કોમોડિટી', old: 'જૂનું', new: 'નવું', change: 'ફેરફાર', days: 'દિવસ',
+    // Price Trend Card
+    priceTrendAnalysis: 'ભાવ વલણ વિશ્લેષણ', selectTimePeriod: 'સમય અવધિ પસંદ કરો:', currentModalPrice: 'વર્તમાન મોડલ ભાવ', perQuintal: 'પ્રતિ ક્વિન્ટલ', asOf: 'મુજબ', priceChange: 'ભાવ ફેરફાર', percentageChange: 'ટકાવારી ફેરફાર', over: 'માં', days_: 'દિવસ', was: 'હતું', on: 'ના રોજ', from: 'થી:', to: 'સુધી:', averagePrice: 'સરેરાશ ભાવ', volatility: 'અસ્થિરતા', peakPrice: 'ટોચનો ભાવ', lowestPrice: 'સૌથી ઓછો ભાવ', highPriceVolatility: 'ઉચ્ચ ભાવ અસ્થિરતા', highVolatilityWarning: 'ભાવો નોંધપાત્ર રીતે વધઘટ કરી રહ્યા છે. વેપાર કરતા પહેલા બજાર પરિસ્થિતિઓ ધ્યાનમાં લો.', currentPriceRange: 'વર્તમાન ભાવ શ્રેણી', min: 'ન્યૂનતમ', modal: 'મોડલ', max: 'મહત્તમ', priceMovement: 'ભાવ ચળવળ',
+    // Weather Card
+    rainfallForecast: 'વરસાદની આગાહી', chanceOfRain: 'વરસાદની તક', probability: 'સંભાવના', high: 'ઊંચી', moderate: 'મધ્યમ', low: 'ઓછી', veryLow: 'ખૂબ ઓછી', expectedThroughoutDay: 'આખા દિવસ અપેક્ષિત', morning: 'સવારે', afternoon: 'બપોરે', evening: 'સાંજે', farmingAdvice: 'ખેતી સલાહ', highRainAdvice: 'વરસાદની ઊંચી તક. સિંચાઈ અને જંતુનાશક છંટકાવ મુલતવી રાખો.', moderateRainAdvice: 'મધ્યમ વરસાદની તક. ખેત પ્રવૃત્તિઓ સાવચેતીથી આયોજન કરો.', lowRainAdvice: 'ઓછા વરસાદની તક. મોટાભાગની ખેતી પ્રવૃત્તિઓ માટે સારું.', veryLowRainAdvice: 'ખૂબ ઓછા વરસાદની તક. સિંચાઈ અને છંટકાવ માટે આદર્શ.',
+    // Weather Forecast 7-Day
+    dayWeatherForecast: '-દિવસનું હવામાન આગાહી', nextDays: 'આગામી', day: 'દિવસ', rainyExpected: 'વરસાદી', expected: 'અપેક્ષિત', mixedWeather: 'મિશ્ર હવામાન', partlyCloudy: 'આંશિક વાદળછાયું', dryAhead: 'સૂકું', ahead: 'આગળ', heavyRainfallAdvice: 'આવનારા', heavyRainfallAdvice2: 'દિવસોમાં ભારે વરસાદ અપેક્ષિત. મુખ્ય ખેત પ્રવૃત્તિઓ મુલતવી રાખો અને યોગ્ય ડ્રેનેજ સુનિશ્ચિત કરો.', variableWeatherAdvice: 'ચલિત હવામાન પરિસ્થિતિઓ. શુષ્ક દિવસોમાં પ્રવૃત્તિઓનું આયોજન કરો.', favorableWeatherAdvice: 'સામાન્ય રીતે અનુકૂળ હવામાન. મોટાભાગની ખેતી પ્રવૃત્તિઓ માટે સારું.', dryConditionsAdvice: 'શુષ્ક પરિસ્થિતિઓ અપેક્ષિત. પાકો માટે પૂરતી સિંચાઈ સુનિશ્ચિત કરો.', avgRainfall: 'સરેરાશ વરસાદ:', today: 'આજે', rainProbability: 'વરસાદ સંભાવના', temp: 'તાપમાન', humidity: 'ભેજ', wind: 'પવન', weeklyRainfallPattern: 'સાપ્તાહિક વરસાદ પેટર્ન', weeklyPlanningAdvice: 'સાપ્તાહિક આયોજન સલાહ', week: 'અઠવાડિયું', period: 'અવધિ',
   },
   pa: {
     appName: 'ਐਗਰੀਗੁਰੂ',
@@ -117,6 +359,15 @@ export const translations = {
     enableLocation: 'ਸਥਾਨ ਸਮਰੱਥ ਕਰੋ',
     error: 'ਮਾਫ਼ ਕਰਨਾ, ਇੱਕ ਤਰੁੱਟੀ ਆਈ ਹੈ। ਕਿਰਪਾ ਕਰਕੇ ਆਪਣੀਆਂ API ਕੁੰਜੀਆਂ ਦੀ ਜਾਂਚ ਕਰੋ ਅਤੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।',
     requestFailed: 'ਤੁਹਾਡੀ ਬੇਨਤੀ ਨੂੰ ਪ੍ਰੋਸੈਸ ਕਰਨ ਵਿੱਚ ਅਸਫਲ। ਕਿਰਪਾ ਕਰਕੇ ਦੁਬਾਰਾ ਕੋਸ਼ਿਸ਼ ਕਰੋ।',
+    
+    // Market Trend Card
+    priceTrends: 'ਭਾਅ ਰੁਝਾਨ', commodities: 'ਵਸਤੂਆਂ', lastDays: 'ਪਿਛਲੇ 30 ਦਿਨ', download: 'ਡਾਊਨਲੋਡ', generating: 'ਤਿਆਰ ਕਰ ਰਿਹਾ ਹੈ...', commodity: 'ਵਸਤੂ', old: 'ਪੁਰਾਣਾ', new: 'ਨਵਾਂ', change: 'ਤਬਦੀਲੀ', days: 'ਦਿਨ',
+    // Price Trend Card
+    priceTrendAnalysis: 'ਭਾਅ ਰੁਝਾਨ ਵਿਸ਼ਲੇਸ਼ਣ', selectTimePeriod: 'ਸਮਾਂ ਮਿਆਦ ਚੁਣੋ:', currentModalPrice: 'ਮੌਜੂਦਾ ਮੋਡਲ ਭਾਅ', perQuintal: 'ਪ੍ਰਤੀ ਕੁਇੰਟਲ', asOf: 'ਮੁਤਾਬਕ', priceChange: 'ਭਾਅ ਤਬਦੀਲੀ', percentageChange: 'ਪ੍ਰਤੀਸ਼ਤ ਤਬਦੀਲੀ', over: 'ਵਿੱਚ', days_: 'ਦਿਨ', was: 'ਸੀ', on: 'ਨੂੰ', from: 'ਤੋਂ:', to: 'ਤੱਕ:', averagePrice: 'ਔਸਤ ਭਾਅ', volatility: 'ਅਸਥਿਰਤਾ', peakPrice: 'ਸਿਖਰ ਭਾਅ', lowestPrice: 'ਸਭ ਤੋਂ ਘੱਟ ਭਾਅ', highPriceVolatility: 'ਉੱਚ ਭਾਅ ਅਸਥਿਰਤਾ', highVolatilityWarning: 'ਭਾਅ ਮਹੱਤਵਪੂਰਨ ਤੌਰ ਤੇ ਉਤਰਾਅ-ਚੜ੍ਹਾਅ ਕਰ ਰਹੇ ਹਨ। ਵਪਾਰ ਕਰਨ ਤੋਂ ਪਹਿਲਾਂ ਮੰਡੀ ਦੀਆਂ ਹਾਲਤਾਂ ਬਾਰੇ ਵਿਚਾਰ ਕਰੋ।', currentPriceRange: 'ਮੌਜੂਦਾ ਭਾਅ ਸੀਮਾ', min: 'ਘੱਟੋ-ਘੱਟ', modal: 'ਮੋਡਲ', max: 'ਵੱਧ ਤੋਂ ਵੱਧ', priceMovement: 'ਭਾਅ ਗਤੀਵਿਧੀ',
+    // Weather Card
+    rainfallForecast: 'ਬਾਰਸ਼ ਦੀ ਭਵਿੱਖਬਾਣੀ', chanceOfRain: 'ਬਾਰਸ਼ ਦੀ ਸੰਭਾਵਨਾ', probability: 'ਸੰਭਾਵਨਾ', high: 'ਉੱਚਾ', moderate: 'ਮੱਧਮ', low: 'ਘੱਟ', veryLow: 'ਬਹੁਤ ਘੱਟ', expectedThroughoutDay: 'ਪੂਰੇ ਦਿਨ ਉਮੀਦ', morning: 'ਸਵੇਰੇ', afternoon: 'ਦੁਪਹਿਰ', evening: 'ਸ਼ਾਮ', farmingAdvice: 'ਖੇਤੀ ਸਲਾਹ', highRainAdvice: 'ਬਾਰਸ਼ ਦੀ ਉੱਚ ਸੰਭਾਵਨਾ। ਸਿੰਚਾਈ ਅਤੇ ਕੀਟਨਾਸ਼ਕ ਛਿੜਕਾਅ ਨੂੰ ਮੁਲਤਵੀ ਕਰੋ।', moderateRainAdvice: 'ਮੱਧਮ ਬਾਰਸ਼ ਸੰਭਾਵਨਾ। ਖੇਤ ਦੀਆਂ ਗਤੀਵਿਧੀਆਂ ਨੂੰ ਧਿਆਨ ਨਾਲ ਯੋਜਨਾਬੱਧ ਕਰੋ।', lowRainAdvice: 'ਘੱਟ ਬਾਰਸ਼ ਸੰਭਾਵਨਾ। ਜ਼ਿਆਦਾਤਰ ਖੇਤੀ ਗਤੀਵਿਧੀਆਂ ਲਈ ਚੰਗਾ।', veryLowRainAdvice: 'ਬਹੁਤ ਘੱਟ ਬਾਰਸ਼ ਸੰਭਾਵਨਾ। ਸਿੰਚਾਈ ਅਤੇ ਛਿੜਕਾਅ ਲਈ ਆਦਰਸ਼।',
+    // Weather Forecast 7-Day
+    dayWeatherForecast: '-ਦਿਨ ਮੌਸਮ ਭਵਿੱਖਬਾਣੀ', nextDays: 'ਅਗਲੇ', day: 'ਦਿਨ', rainyExpected: 'ਬਰਸਾਤੀ', expected: 'ਉਮੀਦ', mixedWeather: 'ਮਿਸ਼ਰਤ ਮੌਸਮ', partlyCloudy: 'ਅੰਸ਼ਕ ਤੌਰ ਤੇ ਬੱਦਲਵਾਈ', dryAhead: 'ਖੁਸ਼ਕ', ahead: 'ਅੱਗੇ', heavyRainfallAdvice: 'ਆਉਣ ਵਾਲੇ', heavyRainfallAdvice2: 'ਦਿਨਾਂ ਵਿੱਚ ਭਾਰੀ ਬਾਰਸ਼ ਦੀ ਉਮੀਦ। ਮੁੱਖ ਖੇਤ ਗਤੀਵਿਧੀਆਂ ਨੂੰ ਮੁਲਤਵੀ ਕਰੋ ਅਤੇ ਸਹੀ ਨਿਕਾਸੀ ਸੁਨਿਸ਼ਚਿਤ ਕਰੋ।', variableWeatherAdvice: 'ਪਰਿਵਰਤਨਸ਼ੀਲ ਮੌਸਮ ਦੀਆਂ ਸਥਿਤੀਆਂ। ਸੁੱਕੇ ਦਿਨਾਂ ਵਿੱਚ ਗਤੀਵਿਧੀਆਂ ਦੀ ਯੋਜਨਾ ਬਣਾਓ।', favorableWeatherAdvice: 'ਆਮ ਤੌਰ ਤੇ ਅਨੁਕੂਲ ਮੌਸਮ। ਜ਼ਿਆਦਾਤਰ ਖੇਤੀ ਗਤੀਵਿਧੀਆਂ ਲਈ ਚੰਗਾ।', dryConditionsAdvice: 'ਸੁੱਕੀਆਂ ਸਥਿਤੀਆਂ ਦੀ ਉਮੀਦ। ਫਸਲਾਂ ਲਈ ਲੋੜੀਂਦੀ ਸਿੰਚਾਈ ਸੁਨਿਸ਼ਚਿਤ ਕਰੋ।', avgRainfall: 'ਔਸਤ ਬਾਰਸ਼:', today: 'ਅੱਜ', rainProbability: 'ਬਾਰਸ਼ ਸੰਭਾਵਨਾ', temp: 'ਤਾਪਮਾਨ', humidity: 'ਨਮੀ', wind: 'ਹਵਾ', weeklyRainfallPattern: 'ਹਫ਼ਤਾਵਾਰੀ ਬਾਰਸ਼ ਪੈਟਰਨ', weeklyPlanningAdvice: 'ਹਫ਼ਤਾਵਾਰੀ ਯੋਜਨਾ ਸਲਾਹ', week: 'ਹਫ਼ਤਾ', period: 'ਮਿਆਦ',
   },
   bn: {
     appName: 'অ্যাগ্রিগুরু',
@@ -130,6 +381,15 @@ export const translations = {
     enableLocation: 'অবস্থান সক্রিয় করুন',
     error: 'দুঃখিত, একটি ত্রুটি ঘটেছে। অনুগ্রহ করে আপনার API কীগুলি পরীক্ষা করুন এবং আবার চেষ্টা করুন।',
     requestFailed: 'আপনার অনুরোধ প্রক্রিয়া করতে ব্যর্থ হয়েছে। অনুগ্রহ করে আবার চেষ্টা করুন।',
+    
+    // Market Trend Card
+    priceTrends: 'মূল্য প্রবণতা', commodities: 'পণ্য', lastDays: 'গত 30 দিন', download: 'ডাউনলোড', generating: 'তৈরি করছি...', commodity: 'পণ্য', old: 'পুরাতন', new: 'নতুন', change: 'পরিবর্তন', days: 'দিন',
+    // Price Trend Card
+    priceTrendAnalysis: 'মূল্য প্রবণতা বিশ্লেষণ', selectTimePeriod: 'সময়কাল নির্বাচন করুন:', currentModalPrice: 'বর্তমান মোডাল মূল্য', perQuintal: 'প্রতি কুইন্টাল', asOf: 'অনুযায়ী', priceChange: 'মূল্য পরিবর্তন', percentageChange: 'শতাংশ পরিবর্তন', over: 'মধ্যে', days_: 'দিন', was: 'ছিল', on: 'তারিখে', from: 'থেকে:', to: 'পর্যন্ত:', averagePrice: 'গড় মূল্য', volatility: 'অস্থিরতা', peakPrice: 'সর্বোচ্চ মূল্য', lowestPrice: 'সর্বনিম্ন মূল্য', highPriceVolatility: 'উচ্চ মূল্য অস্থিরতা', highVolatilityWarning: 'মূল্য উল্লেখযোগ্যভাবে ওঠানামা করছে। ব্যবসা করার আগে বাজারের অবস্থা বিবেচনা করুন।', currentPriceRange: 'বর্তমান মূল্য পরিসীমা', min: 'সর্বনিম্ন', modal: 'মোডাল', max: 'সর্বোচ্চ', priceMovement: 'মূল্য গতিবিধি',
+    // Weather Card
+    rainfallForecast: 'বৃষ্টিপাতের পূর্বাভাস', chanceOfRain: 'বৃষ্টির সম্ভাবনা', probability: 'সম্ভাবনা', high: 'উচ্চ', moderate: 'মাঝারি', low: 'কম', veryLow: 'অতি কম', expectedThroughoutDay: 'সারাদিন প্রত্যাশিত', morning: 'সকাল', afternoon: 'দুপুর', evening: 'সন্ধ্যা', farmingAdvice: 'কৃষি পরামর্শ', highRainAdvice: 'বৃষ্টির উচ্চ সম্ভাবনা। সেচ এবং কীটনাশক স্প্রে স্থগিত করুন।', moderateRainAdvice: 'মাঝারি বৃষ্টির সম্ভাবনা। মাঠের কার্যক্রম সাবধানে পরিকল্পনা করুন।', lowRainAdvice: 'কম বৃষ্টির সম্ভাবনা। বেশিরভাগ কৃষি কার্যক্রমের জন্য ভাল।', veryLowRainAdvice: 'অতি কম বৃষ্টির সম্ভাবনা। সেচ এবং স্প্রে করার জন্য আদর্শ।',
+    // Weather Forecast 7-Day
+    dayWeatherForecast: '-দিনের আবহাওয়া পূর্বাভাস', nextDays: 'পরবর্তী', day: 'দিন', rainyExpected: 'বৃষ্টি', expected: 'প্রত্যাশিত', mixedWeather: 'মিশ্র আবহাওয়া', partlyCloudy: 'আংশিক মেঘলা', dryAhead: 'শুষ্ক', ahead: 'সামনে', heavyRainfallAdvice: 'আগামী', heavyRainfallAdvice2: 'দিনে ভারী বৃষ্টিপাত প্রত্যাশিত। প্রধান মাঠের কার্যক্রম স্থগিত করুন এবং সঠিক নিষ্কাশন নিশ্চিত করুন।', variableWeatherAdvice: 'পরিবর্তনশীল আবহাওয়া পরিস্থিতি। শুষ্ক দিনে কার্যক্রম পরিকল্পনা করুন।', favorableWeatherAdvice: 'সাধারণত অনুকূল আবহাওয়া। বেশিরভাগ কৃষি কার্যক্রমের জন্য ভাল।', dryConditionsAdvice: 'শুষ্ক অবস্থা প্রত্যাশিত। ফসলের জন্য পর্যাপ্ত সেচ নিশ্চিত করুন।', avgRainfall: 'গড় বৃষ্টিপাত:', today: 'আজ', rainProbability: 'বৃষ্টির সম্ভাবনা', temp: 'তাপমাত্রা', humidity: 'আর্দ্রতা', wind: 'বায়ু', weeklyRainfallPattern: 'সাপ্তাহিক বৃষ্টিপাত প্যাটার্ন', weeklyPlanningAdvice: 'সাপ্তাহিক পরিকল্পনা পরামর্শ', week: 'সপ্তাহ', period: 'সময়কাল',
   },
   or: {
     appName: 'ଏଗ୍ରିଗୁରୁ',

@@ -4,12 +4,14 @@ import commodityImageService from '../services/commodityImageService';
 import marketTrendImageService from '../services/marketTrendImageService';
 import priceTrendService from '../services/priceTrendService';
 import { formatPrice } from '../utils/formatPrice';
+import { useTranslation } from '../hooks/useTranslation';
 
 /**
  * Market-Wide Trend Card Component
  * Compact single-card view showing all commodities with old price, new price, and change
  */
-function MarketTrendCard({ trendsData: initialTrendsData, marketInfo, trendQueryParams }) {
+function MarketTrendCard({ trendsData: initialTrendsData, marketInfo, trendQueryParams, language = 'en' }) {
+  const { t } = useTranslation(language);
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [trendsData, setTrendsData] = useState(initialTrendsData);
   const [selectedDays, setSelectedDays] = useState(30);
@@ -92,9 +94,9 @@ function MarketTrendCard({ trendsData: initialTrendsData, marketInfo, trendQuery
         <div className="flex items-start justify-between mb-2">
           <div>
             <h2 className="text-lg font-bold">
-              {marketInfo.market || marketInfo.district || 'Market'} - Price Trends
+              {marketInfo.market || marketInfo.district || 'Market'} - {t('priceTrends')}
             </h2>
-            <p className="text-xs text-blue-100 mt-1">Last 30 days • {stats.total} commodities</p>
+            <p className="text-xs text-blue-100 mt-1">{t('lastDays')} • {stats.total} {t('commodities')}</p>
           </div>
           <button
             onClick={handleDownload}
@@ -105,12 +107,12 @@ function MarketTrendCard({ trendsData: initialTrendsData, marketInfo, trendQuery
             {isGeneratingImage ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span className="hidden sm:inline">Generating...</span>
+                <span className="hidden sm:inline">{t('generating')}</span>
               </>
             ) : (
               <>
                 <Download className="w-4 h-4" />
-                <span className="hidden sm:inline">Download</span>
+                <span className="hidden sm:inline">{t('download')}</span>
               </>
             )}
           </button>
@@ -132,7 +134,7 @@ function MarketTrendCard({ trendsData: initialTrendsData, marketInfo, trendQuery
               {isLoadingDays && days === selectedDays ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                `${days} Days`
+                `${days} ${t('days')}`
               )}
             </button>
           ))}
@@ -144,10 +146,10 @@ function MarketTrendCard({ trendsData: initialTrendsData, marketInfo, trendQuery
         <table className="w-full">
           <thead>
             <tr className="bg-gray-100 border-b-2 border-gray-300">
-              <th className="text-left p-2 text-xs font-semibold text-gray-700">Commodity</th>
-              <th className="text-right p-2 text-xs font-semibold text-gray-700">Old</th>
-              <th className="text-right p-2 text-xs font-semibold text-gray-700">New</th>
-              <th className="text-right p-2 text-xs font-semibold text-gray-700">Change</th>
+              <th className="text-left p-2 text-xs font-semibold text-gray-700">{t('commodity')}</th>
+              <th className="text-right p-2 text-xs font-semibold text-gray-700">{t('old')}</th>
+              <th className="text-right p-2 text-xs font-semibold text-gray-700">{t('new')}</th>
+              <th className="text-right p-2 text-xs font-semibold text-gray-700">{t('change')}</th>
             </tr>
           </thead>
           <tbody>

@@ -252,7 +252,8 @@ function App() {
             type: 'bot',
             text: weatherResult.message,
             timestamp: new Date(),
-            language: queryLanguage
+            language: queryLanguage,
+            responseTime: getResponseTime()
           };
           
           setMessages(prev => [...prev, botMessage]);
@@ -403,7 +404,8 @@ function App() {
             timestamp: new Date(),
             language: queryLanguage,
             suggestions: suggestions,
-            originalIntent: intent
+            originalIntent: intent,
+            responseTime: getResponseTime()
           };
           
           setMessages(prev => [...prev, disambiguationMessage]);
@@ -1090,7 +1092,8 @@ function App() {
             disambiguationOptions: [
               ...locations.markets.slice(0, 3),
               ...locations.districts.slice(0, 3)
-            ]
+            ],
+            responseTime: getResponseTime()
           };
           setMessages(prev => [...prev, disambiguationMessage]);
           setIsLoading(false);
@@ -1116,7 +1119,8 @@ function App() {
               : 'Please specify a market location or enable location access to get prices from nearby markets.',
             timestamp: new Date(),
             language: queryLanguage,
-            showLocationPrompt: true
+            showLocationPrompt: true,
+            responseTime: getResponseTime()
           };
           
           setMessages(prev => [...prev, promptMessage]);
@@ -1999,7 +2003,8 @@ function App() {
               language: queryLanguage,
               marketSuggestions: marketSuggestions,
               locationBasedSuggestions: locationBasedSuggestions,
-              showLocationRequest: !locationBasedSuggestions && !locationService.hasLocationPermission()
+              showLocationRequest: !locationBasedSuggestions && !locationService.hasLocationPermission(),
+              responseTime: getResponseTime()
             };
 
             setMessages(prev => [...prev, botMessage]);
@@ -2027,7 +2032,8 @@ function App() {
         text: t('error'),
         timestamp: new Date(),
         language: selectedLanguage,
-        isError: true
+        isError: true,
+        responseTime: getResponseTime()
       };
       setMessages(prev => [...prev, errorMessage]);
     } finally {
@@ -2371,6 +2377,7 @@ function App() {
               message={message}
               onSpeak={(msg) => voiceService.speak(msg.text, msg.language)}
               onSelectMarket={handleMarketSelection}
+              language={selectedLanguage}
             />
           ))}
           

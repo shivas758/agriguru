@@ -5,12 +5,13 @@
  */
 
 import commodityImageService from './commodityImageService';
+import { getTranslation } from '../config/translations';
 
 class MarketTrendImageService {
   /**
    * Generate trend image for multiple commodities
    */
-  async generateTrendImages(trendsData, marketInfo = {}, itemsPerPage = 10) {
+  async generateTrendImages(trendsData, marketInfo = {}, itemsPerPage = 10, language = 'en') {
     if (!trendsData || !trendsData.commodities || trendsData.commodities.length === 0) {
       throw new Error('No trend data available to generate image');
     }
@@ -34,7 +35,8 @@ class MarketTrendImageService {
         marketInfo,
         trendsData.dateRange,
         pageIndex + 1, 
-        pages.length
+        pages.length,
+        language
       );
       images.push(imageUrl);
     }
@@ -45,7 +47,8 @@ class MarketTrendImageService {
   /**
    * Generate a single trend image
    */
-  async generateSingleTrendImage(trends, marketInfo = {}, dateRange = {}, pageNumber = 1, totalPages = 1) {
+  async generateSingleTrendImage(trends, marketInfo = {}, dateRange = {}, pageNumber = 1, totalPages = 1, language = 'en') {
+    const t = (key) => getTranslation(language, key);
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
 
@@ -69,11 +72,11 @@ class MarketTrendImageService {
     ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
     // Draw title (pass unscaled width)
-    this.drawTitleSection(ctx, marketInfo, dateRange, canvasWidth / scale);
+    this.drawTitleSection(ctx, marketInfo, dateRange, canvasWidth / scale, t);
 
     // Draw table (pass unscaled values)
     const tableY = titleHeight / scale;
-    await this.drawTrendTable(ctx, trends, tableY, canvasWidth / scale);
+    await this.drawTrendTable(ctx, trends, tableY, canvasWidth / scale, t);
 
     // Footer (pass unscaled values)
     this.drawFooter(ctx, (canvasHeight - footerHeight) / scale, canvasWidth / scale, canvasHeight / scale, pageNumber, totalPages);
@@ -84,7 +87,7 @@ class MarketTrendImageService {
   /**
    * Draw title section
    */
-  drawTitleSection(ctx, marketInfo, dateRange, canvasWidth) {
+  drawTitleSection(ctx, marketInfo, dateRange, canvasWidth, t = (key) => key) {
     const padding = 30;
     
     // Title
@@ -93,7 +96,7 @@ class MarketTrendImageService {
     ctx.fillStyle = '#dc2626';
     ctx.font = 'bold 22px Arial, sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(`${marketName} - Price Trends`, canvasWidth / 2, 40);
+    ctx.fillText(`${marketName} - ${t('priceTrends')}`, canvasWidth / 2, 40);
 
     // Date range - compact
     const startDate = dateRange.start || '';
@@ -129,7 +132,7 @@ class MarketTrendImageService {
   /**
    * Draw trend table
    */
-  async drawTrendTable(ctx, trends, startY, canvasWidth) {
+  async drawTrendTable(ctx, trends, startY, canvasWidth, t = (key) => key) {
     const padding = 30;
     const tableWidth = canvasWidth - (padding * 2);
     const tableX = padding;
@@ -163,11 +166,11 @@ class MarketTrendImageService {
     
     // Headers - compact for portrait
     const headers = [
-      { text: ['Commodity'], width: nameColWidth },
-      { text: ['Current', 'Price'], width: newPriceColWidth },
-      { text: ['Change'], width: changeColWidth },
-      { text: ['Change', '%'], width: percentColWidth },
-      { text: ['Trend'], width: trendColWidth }
+      { text: [t('commodity')], width: nameColWidth },
+      { text: [t('new')], width: newPriceColWidth },
+      { text: [t('change')], width: changeColWidth },
+      { text: [t('percentageChange').split(' ')[0] || t('change')], width: percentColWidth },
+      { text: ['↑↓'], width: trendColWidth }
     ];
     
     ctx.fillStyle = '#ffffff';

@@ -1,7 +1,9 @@
 import React from 'react';
 import { CloudRain, Droplets, Calendar, Sunrise, Sun, Sunset } from 'lucide-react';
+import { useTranslation } from '../hooks/useTranslation';
 
-const WeatherCard = ({ weatherInfo, location, query = '' }) => {
+const WeatherCard = ({ weatherInfo, location, query = '', language = 'en' }) => {
+  const { t } = useTranslation(language);
   // Determine forecast date based on query
   const getForecastDate = () => {
     const now = new Date();
@@ -59,36 +61,36 @@ const WeatherCard = ({ weatherInfo, location, query = '' }) => {
   // Determine rainfall category
   const getRainfallCategory = (chance) => {
     if (chance >= 70) return { 
-      level: 'High', 
+      level: t('high'), 
       color: 'text-blue-700', 
       bg: 'bg-blue-50', 
       borderColor: 'border-blue-300',
       icon: CloudRain,
-      advice: 'High chance of rain. Postpone irrigation and pesticide spraying.'
+      advice: t('highRainAdvice')
     };
     if (chance >= 40) return { 
-      level: 'Moderate', 
+      level: t('moderate'), 
       color: 'text-blue-600', 
       bg: 'bg-blue-50', 
       borderColor: 'border-blue-200',
       icon: CloudRain,
-      advice: 'Moderate rain chance. Plan field activities carefully.'
+      advice: t('moderateRainAdvice')
     };
     if (chance >= 20) return { 
-      level: 'Low', 
+      level: t('low'), 
       color: 'text-gray-600', 
       bg: 'bg-gray-50', 
       borderColor: 'border-gray-200',
       icon: Droplets,
-      advice: 'Low rain chance. Good for most farming activities.'
+      advice: t('lowRainAdvice')
     };
     return { 
-      level: 'Very Low', 
+      level: t('veryLow'), 
       color: 'text-gray-500', 
       bg: 'bg-gray-50', 
       borderColor: 'border-gray-200',
       icon: Droplets,
-      advice: 'Very low rain chance. Ideal for irrigation and spraying.'
+      advice: t('veryLowRainAdvice')
     };
   };
   
@@ -100,7 +102,7 @@ const WeatherCard = ({ weatherInfo, location, query = '' }) => {
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h3 className="font-bold text-gray-800 text-base">Rainfall Forecast</h3>
+          <h3 className="font-bold text-gray-800 text-base">{t('rainfallForecast')}</h3>
           {location && (
             <p className="text-xs text-gray-600 mt-0.5">{location}</p>
           )}
@@ -116,20 +118,20 @@ const WeatherCard = ({ weatherInfo, location, query = '' }) => {
         <div className="flex flex-col items-center">
           <RainIcon className={`w-12 h-12 ${category.color} mb-2`} />
           <p className="text-5xl font-bold text-gray-800 mb-1">{rainChance}%</p>
-          <p className={`text-sm font-semibold ${category.color}`}>Chance of Rain</p>
-          <p className="text-xs text-gray-600 mt-1">{category.level} Probability</p>
+          <p className={`text-sm font-semibold ${category.color}`}>{t('chanceOfRain')}</p>
+          <p className="text-xs text-gray-600 mt-1">{category.level} {t('probability')}</p>
         </div>
       </div>
 
       {/* Time-based Rainfall Indicators */}
       <div className="mb-4">
-        <p className="text-xs font-semibold text-gray-700 mb-2">Expected Throughout Day</p>
+        <p className="text-xs font-semibold text-gray-700 mb-2">{t('expectedThroughoutDay')}</p>
         <div className="grid grid-cols-3 gap-2">
           {/* Morning */}
           <div className="bg-gradient-to-br from-orange-50 to-yellow-50 rounded-lg p-3 border border-orange-200">
             <div className="flex flex-col items-center">
               <Sunrise className="w-5 h-5 text-orange-500 mb-1" />
-              <p className="text-xs text-gray-700 font-medium mb-1">Morning</p>
+              <p className="text-xs text-gray-700 font-medium mb-1">{t('morning')}</p>
               <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
                 <div 
                   className="bg-blue-500 h-2 rounded-full transition-all" 
@@ -144,7 +146,7 @@ const WeatherCard = ({ weatherInfo, location, query = '' }) => {
           <div className="bg-gradient-to-br from-yellow-50 to-amber-50 rounded-lg p-3 border border-yellow-200">
             <div className="flex flex-col items-center">
               <Sun className="w-5 h-5 text-yellow-500 mb-1" />
-              <p className="text-xs text-gray-700 font-medium mb-1">Afternoon</p>
+              <p className="text-xs text-gray-700 font-medium mb-1">{t('afternoon')}</p>
               <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
                 <div 
                   className="bg-blue-500 h-2 rounded-full transition-all" 
@@ -159,7 +161,7 @@ const WeatherCard = ({ weatherInfo, location, query = '' }) => {
           <div className="bg-gradient-to-br from-purple-50 to-indigo-50 rounded-lg p-3 border border-purple-200">
             <div className="flex flex-col items-center">
               <Sunset className="w-5 h-5 text-purple-500 mb-1" />
-              <p className="text-xs text-gray-700 font-medium mb-1">Evening</p>
+              <p className="text-xs text-gray-700 font-medium mb-1">{t('evening')}</p>
               <div className="w-full bg-gray-200 rounded-full h-2 mb-1">
                 <div 
                   className="bg-blue-500 h-2 rounded-full transition-all" 

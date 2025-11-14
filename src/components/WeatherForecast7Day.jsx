@@ -1,7 +1,9 @@
 import React from 'react';
 import { CloudRain, Droplets, Calendar, Wind, Thermometer, Sun, Cloud, CloudDrizzle, CloudSnow, CloudFog, Zap, Eye } from 'lucide-react';
+import { useTranslation } from '../hooks/useTranslation';
 
-const WeatherForecast7Day = ({ forecastData, location, numberOfDays = 7 }) => {
+const WeatherForecast7Day = ({ forecastData, location, numberOfDays = 7, language = 'en' }) => {
+  const { t } = useTranslation(language);
   // Parse the forecast data from Gemini response
   const parseDailyForecasts = (data) => {
     // If data is a string, try to parse it
@@ -54,39 +56,39 @@ const WeatherForecast7Day = ({ forecastData, location, numberOfDays = 7 }) => {
   
   // Determine overall period outlook
   const getWeekOutlook = (avg) => {
-    const period = numberOfDays === 7 ? 'Week' : `${numberOfDays}-Day Period`;
+    const period = numberOfDays === 7 ? t('week') : `${numberOfDays}-${t('day')} ${t('period')}`;
     
     if (avg >= 60) return {
-      text: `Rainy ${period} Expected`,
+      text: `${t('rainyExpected')} ${period} ${t('expected')}`,
       icon: CloudRain,
       color: 'text-blue-700',
       bg: 'bg-blue-50',
       border: 'border-blue-300',
-      advice: `Heavy rainfall expected in the coming ${numberOfDays} days. Postpone major field activities and ensure proper drainage.`
+      advice: `${t('heavyRainfallAdvice')} ${numberOfDays} ${t('heavyRainfallAdvice2')}`
     };
     if (avg >= 40) return {
-      text: `Mixed Weather ${period}`,
+      text: `${t('mixedWeather')} ${period}`,
       icon: CloudDrizzle,
       color: 'text-blue-600',
       bg: 'bg-blue-50',
       border: 'border-blue-200',
-      advice: 'Variable weather conditions. Plan activities around drier days.'
+      advice: t('variableWeatherAdvice')
     };
     if (avg >= 20) return {
-      text: `Partly Cloudy ${period}`,
+      text: `${t('partlyCloudy')} ${period}`,
       icon: Cloud,
       color: 'text-gray-600',
       bg: 'bg-gray-50',
       border: 'border-gray-200',
-      advice: 'Generally favorable weather. Good for most farming activities.'
+      advice: t('favorableWeatherAdvice')
     };
     return {
-      text: `Dry ${period} Ahead`,
+      text: `${t('dryAhead')} ${period} ${t('ahead')}`,
       icon: Sun,
       color: 'text-yellow-600',
       bg: 'bg-yellow-50',
       border: 'border-yellow-200',
-      advice: 'Dry conditions expected. Ensure adequate irrigation for crops.'
+      advice: t('dryConditionsAdvice')
     };
   };
   
@@ -149,14 +151,14 @@ const WeatherForecast7Day = ({ forecastData, location, numberOfDays = 7 }) => {
       <div className="mb-4">
         <div className="flex items-center justify-between mb-2">
           <div>
-            <h3 className="font-bold text-gray-800 text-lg">{numberOfDays}-Day Weather Forecast</h3>
+            <h3 className="font-bold text-gray-800 text-lg">{numberOfDays}{t('dayWeatherForecast')}</h3>
             {location && (
               <p className="text-sm text-gray-600 mt-0.5">{location}</p>
             )}
           </div>
           <div className="flex items-center gap-1 text-xs text-gray-600">
             <Calendar className="w-4 h-4" />
-            <span>Next {numberOfDays} {numberOfDays === 1 ? 'Day' : 'Days'}</span>
+            <span>{t('nextDays')} {numberOfDays} {numberOfDays === 1 ? t('day') : t('days')}</span>
           </div>
         </div>
         
@@ -166,7 +168,7 @@ const WeatherForecast7Day = ({ forecastData, location, numberOfDays = 7 }) => {
             <OutlookIcon className={`w-5 h-5 ${outlook.color}`} />
             <div className="flex-1">
               <p className={`text-sm font-semibold ${outlook.color}`}>{outlook.text}</p>
-              <p className="text-xs text-gray-600 mt-0.5">Avg. Rainfall: {avgRainfall.toFixed(0)}%</p>
+              <p className="text-xs text-gray-600 mt-0.5">{t('avgRainfall')} {avgRainfall.toFixed(0)}%</p>
             </div>
           </div>
         </div>
@@ -202,7 +204,7 @@ const WeatherForecast7Day = ({ forecastData, location, numberOfDays = 7 }) => {
                     <span className={`text-sm font-bold ${
                       index === 0 ? 'text-blue-700' : 'text-gray-800'
                     }`}>
-                      {index === 0 ? 'Today' : day.dayName}
+                      {index === 0 ? t('today') : day.dayName}
                     </span>
                     <p className="text-xs text-gray-600">{day.dateStr}</p>
                   </div>
@@ -235,7 +237,7 @@ const WeatherForecast7Day = ({ forecastData, location, numberOfDays = 7 }) => {
               {/* Rainfall Bar */}
               <div className="mb-3">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs text-gray-600 font-medium">Rain Probability</span>
+                  <span className="text-xs text-gray-600 font-medium">{t('rainProbability')}</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-3 overflow-hidden shadow-inner">
                   <div 
@@ -254,7 +256,7 @@ const WeatherForecast7Day = ({ forecastData, location, numberOfDays = 7 }) => {
                     <span className="text-xs font-semibold text-gray-700">
                       {day.temperature || 'N/A'}
                     </span>
-                    <span className="text-[10px] text-gray-500">Temp</span>
+                    <span className="text-[10px] text-gray-500">{t('temp')}</span>
                   </div>
                 </div>
                 
@@ -265,7 +267,7 @@ const WeatherForecast7Day = ({ forecastData, location, numberOfDays = 7 }) => {
                     <span className="text-xs font-semibold text-gray-700">
                       {day.humidity ? `${day.humidity}%` : 'N/A'}
                     </span>
-                    <span className="text-[10px] text-gray-500">Humidity</span>
+                    <span className="text-[10px] text-gray-500">{t('humidity')}</span>
                   </div>
                 </div>
                 
@@ -276,7 +278,7 @@ const WeatherForecast7Day = ({ forecastData, location, numberOfDays = 7 }) => {
                     <span className="text-xs font-semibold text-gray-700">
                       {day.windSpeed ? `${day.windSpeed}` : 'N/A'}
                     </span>
-                    <span className="text-[10px] text-gray-500">Wind</span>
+                    <span className="text-[10px] text-gray-500">{t('wind')}</span>
                   </div>
                 </div>
               </div>
@@ -289,7 +291,7 @@ const WeatherForecast7Day = ({ forecastData, location, numberOfDays = 7 }) => {
       <div className="mb-4 bg-gradient-to-br from-blue-50 to-indigo-50 rounded-lg p-3 border border-blue-200">
         <p className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1">
           <CloudRain className="w-3.5 h-3.5" />
-          Weekly Rainfall Pattern
+          {t('weeklyRainfallPattern')}
         </p>
         <div className="flex items-end justify-between gap-1 h-16">
           {days.map((day, index) => (
@@ -313,7 +315,7 @@ const WeatherForecast7Day = ({ forecastData, location, numberOfDays = 7 }) => {
         <div className="flex items-start gap-2">
           <div className="w-1.5 h-1.5 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
           <div>
-            <p className="text-xs font-semibold text-green-800 mb-1">Weekly Planning Advice</p>
+            <p className="text-xs font-semibold text-green-800 mb-1">{t('weeklyPlanningAdvice')}</p>
             <p className="text-xs text-green-700 leading-relaxed">
               {outlook.advice}
             </p>
