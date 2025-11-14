@@ -419,9 +419,18 @@ export const validateMarketWithLocationIntelligence = async (marketName, state =
   // If there's a high-confidence fuzzy match (>70%), prefer fuzzy over "both"
   const hasHighConfidenceMatch = spellingSuggestions.some(s => s.similarity > 0.7);
   
+  const isRealNonMarketLocation = locationValidation &&
+    locationValidation.isRealLocation &&
+    !exactMatch &&
+    (locationValidation.hasMarket === false ||
+      locationValidation.locationType === 'village' ||
+      locationValidation.locationType === 'town' ||
+      locationValidation.locationType === 'mandal');
+  
   if (locationValidation) {
-    // Override Gemini's "both" strategy if we have high-confidence fuzzy matches
-    if (locationValidation.strategy === 'both' && hasHighConfidenceMatch) {
+    if (isRealNonMarketLocation) {
+      strategy = 'nearby_markets';
+    } else if (locationValidation.strategy === 'both' && hasHighConfidenceMatch) {
       strategy = 'fuzzy_match';
       console.log('📍 Overriding "both" strategy to "fuzzy_match" due to high-confidence matches');
     } else {
