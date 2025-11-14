@@ -124,7 +124,8 @@ function App() {
       type: 'bot',
       text: t('stopped'),
       timestamp: new Date(),
-      language: selectedLanguage
+      language: selectedLanguage,
+      isStopped: true
     };
     
     setMessages(prev => [...prev, stopMessage]);

@@ -8,7 +8,7 @@ export const translations = {
     recordingPlaceholder: 'Listening...',
     thinking: 'Thinking...',
     stop: 'Stop',
-    stopped: 'Generation stopped by user.',
+    stopped: 'Search Stopped',
     locationEnabled: 'Location enabled',
     enableLocation: 'Enable location',
     error: 'Sorry, I encountered an error. Please check your API keys and try again.',

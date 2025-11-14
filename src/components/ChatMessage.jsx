@@ -232,7 +232,9 @@ const ChatMessage = ({ message, onSpeak, onSelectMarket, language = 'en' }) => {
                 </div>
               )}
               
-              <p className="whitespace-pre-wrap text-[15px] leading-[1.6]">{message.text}</p>
+              <p className={`whitespace-pre-wrap text-[15px] leading-[1.6] ${message.isStopped ? 'italic' : ''}`}>
+                {message.text}
+              </p>
               
               {!isUser && message.text && (
                 <div className="flex items-center gap-1 mt-2">
