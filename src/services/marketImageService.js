@@ -340,29 +340,50 @@ class MarketImageService {
       displayName = `${commodityName} (${variety})`;
     }
     
-    // Wrap text if needed
+    // Wrap text if needed (supports breaking long words like "Bengal Gram(Gram)(Whole)")
     const maxWidth = nameColWidth - 10; // padding
     const words = displayName.split(' ');
     const lines = [];
-    let currentLine = words[0];
-    
-    for (let i = 1; i < words.length; i++) {
-      const testLine = currentLine + ' ' + words[i];
-      const metrics = ctx.measureText(testLine);
-      if (metrics.width > maxWidth && currentLine) {
-        lines.push(currentLine);
-        currentLine = words[i];
-      } else {
+    let currentLine = '';
+
+    words.forEach((word) => {
+      const testLine = currentLine ? currentLine + ' ' + word : word;
+      if (ctx.measureText(testLine).width <= maxWidth) {
         currentLine = testLine;
+      } else {
+        if (currentLine) {
+          lines.push(currentLine);
+        }
+
+        // If a single word is too long, hard-wrap it by characters
+        if (ctx.measureText(word).width > maxWidth) {
+          let subLine = '';
+          for (const ch of word) {
+            const testSubLine = subLine + ch;
+            if (ctx.measureText(testSubLine).width > maxWidth && subLine) {
+              lines.push(subLine);
+              subLine = ch;
+            } else {
+              subLine = testSubLine;
+            }
+          }
+          currentLine = subLine;
+        } else {
+          currentLine = word;
+        }
       }
+    });
+
+    if (currentLine) {
+      lines.push(currentLine);
     }
-    lines.push(currentLine);
     
-    // Draw wrapped lines
+    // Draw wrapped lines - align vertically with row center (same as prices), slightly nudged down
     const lineHeight = 18;
     const dateSpace = 16; // Space for date
     const totalHeight = (lines.length * lineHeight) + dateSpace;
-    let textY = y + (rowHeight - totalHeight) / 2 + 13;
+    const rowCenterY = y + rowHeight / 2;
+    let textY = rowCenterY - (totalHeight / 2) + lineHeight + 2;
     
     lines.forEach(line => {
       ctx.fillText(line, currentX + nameColWidth / 2, textY);
