@@ -1255,47 +1255,34 @@ function App() {
       if (isStateQuery) {
         // Case 1: State-wide market overview (no commodity specified)
         if (!intent.commodity) {
-          // Too many markets in a state - need user to specify
-          // If user has location access, show markets in their district
-          if (locationService.hasLocationPermission()) {
-            try {
-              const position = await locationService.getCurrentPosition();
-              if (position && position.district && position.state) {
-                const districtMarkets = await supabaseDirect.getMarketsInDistrict(
-                  position.district,
-                  position.state,
-                  10
-                );
-                
-                if (districtMarkets.length > 0) {
-                  const suggestionMessage = {
-                    id: Date.now() + 1,
-                    type: 'bot',
-                    text: queryLanguage === 'hi'
-                      ? `${intent.location.state} में बहुत सारे बाज़ार हैं। आपके जिले (${position.district}) के बाज़ार:`
-                      : `There are too many markets in ${intent.location.state}. Markets in your district (${position.district}):`,
-                    timestamp: new Date(),
-                    language: queryLanguage,
-                    locationBasedSuggestions: {
-                      markets: districtMarkets.map(m => ({ ...m, distance: null })),
-                      userLocation: position,
-                      type: 'district'
-                    },
-                    responseTime: getResponseTime()
-                  };
-                  
-                  setMessages(prev => [...prev, suggestionMessage]);
-                  setIsLoading(false);
-                  return;
-                }
-              }
-            } catch (err) {
-              console.log('Could not get user location for state query:', err.message);
+          try {
+            const stateMarkets = await supabaseDirect.getMarketsInState(intent.location.state, 1000);
+            if (stateMarkets && stateMarkets.length > 0) {
+              const selectionMessage = {
+                id: Date.now() + 1,
+                type: 'bot',
+                text: queryLanguage === 'hi'
+                  ? `${intent.location.state} में बहुत सारे बाज़ार हैं। कृपया नीचे से जिला और बाज़ार चुनें।`
+                  : `There are many markets in ${intent.location.state}. Please select a district and market below.`,
+                timestamp: new Date(),
+                language: queryLanguage,
+                stateMarketSelection: {
+                  state: intent.location.state,
+                  markets: stateMarkets,
+                  queryType: intent.queryType || 'market_overview'
+                },
+                responseTime: getResponseTime()
+              };
+              
+              setMessages(prev => [...prev, selectionMessage]);
+              setIsLoading(false);
+              return;
             }
+          } catch (error) {
+            console.error('Error loading markets for state-wide selection:', error);
           }
-          
-          // No location access or couldn't get location - ask user to specify
-          const specifyMessage = {
+
+          const fallbackMessage = {
             id: Date.now() + 1,
             type: 'bot',
             text: queryLanguage === 'hi'
@@ -1306,7 +1293,7 @@ function App() {
             responseTime: getResponseTime()
           };
           
-          setMessages(prev => [...prev, specifyMessage]);
+          setMessages(prev => [...prev, fallbackMessage]);
           setIsLoading(false);
           return;
         }

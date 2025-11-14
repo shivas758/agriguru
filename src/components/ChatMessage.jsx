@@ -1,5 +1,5 @@
 import React, { useState, memo } from 'react';
-import { Volume2, User, Bot, MapPin, Package, Calendar, TrendingUp, Navigation, History, Download, Loader2, Clock } from 'lucide-react';
+import { Volume2, User, Bot, MapPin, Package, Calendar, TrendingUp, Navigation, History, Download, Loader2, Clock, ChevronDown } from 'lucide-react';
 import voiceService from '../services/voiceService';
 import commodityImageService from '../services/commodityImageService';
 import marketImageService from '../services/marketImageService';
@@ -129,6 +129,10 @@ const ChatMessage = ({ message, onSpeak, onSelectMarket, language = 'en' }) => {
   const isNearbyResult = message.isNearbyResult;
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const [generatedImages, setGeneratedImages] = useState(null);
+  const [expandedMarkets, setExpandedMarkets] = useState({});
+  const [marketShowAll, setMarketShowAll] = useState({});
+  const [selectedStateDistrict, setSelectedStateDistrict] = useState('');
+  const [selectedStateMarketKey, setSelectedStateMarketKey] = useState('');
 
   const handleSpeak = () => {
     if (onSpeak) {
@@ -146,6 +150,34 @@ const ChatMessage = ({ message, onSpeak, onSelectMarket, language = 'en' }) => {
   }, [message]);
 
   // No longer generating trend images - using MarketTrendCard component instead
+
+  // For district-wide views, auto-expand the first market by default
+  React.useEffect(() => {
+    if (!message.isDistrictOverview || !message.priceData || message.priceData.length === 0) {
+      return;
+    }
+
+    if (Object.keys(expandedMarkets).length > 0) {
+      // Preserve user toggles once they start interacting
+      return;
+    }
+
+    const byMarket = {};
+    message.priceData.forEach(item => {
+      if (!byMarket[item.market]) {
+        byMarket[item.market] = [];
+      }
+      byMarket[item.market].push(item);
+    });
+
+    const marketNames = Object.keys(byMarket);
+    if (marketNames.length === 0) return;
+
+    setExpandedMarkets(prev => ({
+      ...prev,
+      [marketNames[0]]: true,
+    }));
+  }, [message.isDistrictOverview, message.priceData]);
 
   const generateMarketImages = async () => {
     if (!message.fullPriceData || message.fullPriceData.length === 0) {
@@ -171,11 +203,50 @@ const ChatMessage = ({ message, onSpeak, onSelectMarket, language = 'en' }) => {
     }
   };
 
+  const toggleMarket = (marketName) => {
+    setExpandedMarkets(prev => ({
+      ...prev,
+      [marketName]: !prev[marketName],
+    }));
+  };
+
 
   const handleMarketSelection = (suggestion) => {
     if (onSelectMarket) {
       onSelectMarket(suggestion);
     }
+  };
+
+  const handleStateMarketSubmit = () => {
+    if (!message.stateMarketSelection || !onSelectMarket) {
+      return;
+    }
+
+    const markets = message.stateMarketSelection.markets || [];
+    if (!selectedStateDistrict || !selectedStateMarketKey) {
+      return;
+    }
+
+    const selected = markets.find(m => {
+      const key = `${m.market}|${m.district}|${m.state}`;
+      return key === selectedStateMarketKey;
+    });
+
+    if (!selected) {
+      return;
+    }
+
+    const suggestion = {
+      type: 'market',
+      market: selected.market,
+      district: selected.district,
+      state: selected.state,
+      value: selected.market,
+      display: `${selected.market} (${selected.district}, ${selected.state})`,
+      queryType: message.stateMarketSelection.queryType || 'market_overview'
+    };
+
+    onSelectMarket(suggestion);
   };
 
   return (
@@ -219,7 +290,7 @@ const ChatMessage = ({ message, onSpeak, onSelectMarket, language = 'en' }) => {
           </div>
         ) : (
           /* Hide text box for market-wide queries, show only for user messages and specific commodity queries */
-          !message.isMarketOverview && (
+          !message.isMarketOverview && !message.isDistrictOverview && (
             <div className={`${
               isUser 
                 ? 'bg-primary-600 text-white ml-auto rounded-2xl px-3.5 py-2.5' 
@@ -318,11 +389,6 @@ const ChatMessage = ({ message, onSpeak, onSelectMarket, language = 'en' }) => {
         ) : message.isDistrictOverview && message.priceData && message.priceData.length > 0 ? (
           /* District-wide query: Group by market and show cards */
           <div className="mt-3">
-            <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 mb-3">
-              <p className="text-sm font-medium text-gray-700">
-                Showing prices from multiple markets in {message.marketInfo?.district}, {message.marketInfo?.state}
-              </p>
-            </div>
             {/* Group prices by market */}
             {(() => {
               const byMarket = {};
@@ -333,29 +399,57 @@ const ChatMessage = ({ message, onSpeak, onSelectMarket, language = 'en' }) => {
                 byMarket[item.market].push(item);
               });
               
-              return Object.entries(byMarket).map(([marketName, items]) => (
-                <div key={marketName} className="mb-4">
-                  <h4 className="text-sm font-semibold text-gray-800 mb-2 flex items-center gap-1">
-                    <MapPin className="w-4 h-4 text-blue-600" />
-                    {marketName} Market
-                  </h4>
-                  <div className="space-y-2">
-                    {items.slice(0, 5).map((price, index) => (
-                      <PriceCard 
-                        key={`${price.commodity}-${price.market}-${index}`} 
-                        price={price} 
-                        isNearbyResult={false}
-                        isHistorical={message.isHistoricalData}
+              return Object.entries(byMarket).map(([marketName, items]) => {
+                const isExpanded = !!expandedMarkets[marketName];
+                const showAll = !!marketShowAll[marketName];
+                const itemsToShow = showAll ? items : items.slice(0, 5);
+                
+                return (
+                  <div key={marketName} className="mb-3 border border-gray-200 rounded-lg overflow-hidden bg-white">
+                    <button
+                      type="button"
+                      onClick={() => toggleMarket(marketName)}
+                      className="w-full flex items-center justify-between px-3 py-2 bg-gray-50 hover:bg-gray-100 transition-colors"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <MapPin className="w-4 h-4 text-blue-600" />
+                        <span className="text-sm font-semibold text-gray-800">
+                          {marketName} Market
+                        </span>
+                        <span className="text-xs text-gray-500">
+                          • {items.length} commodities
+                        </span>
+                      </div>
+                      <ChevronDown
+                        className={`w-4 h-4 text-gray-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`}
                       />
-                    ))}
-                    {items.length > 5 && (
-                      <p className="text-xs text-gray-500 text-center py-1">
-                        +{items.length - 5} more commodities in this market
-                      </p>
+                    </button>
+                    {isExpanded && (
+                      <div className="px-3 pb-2 pt-1 space-y-2">
+                        {itemsToShow.map((price, index) => (
+                          <PriceCard 
+                            key={`${price.commodity}-${price.market}-${index}`} 
+                            price={price} 
+                            isNearbyResult={false}
+                            isHistorical={message.isHistoricalData}
+                          />
+                        ))}
+                        {items.length > 5 && !showAll && (
+                          <div className="flex justify-center pt-1">
+                            <button
+                              type="button"
+                              onClick={() => setMarketShowAll(prev => ({ ...prev, [marketName]: true }))}
+                              className="text-xs text-primary-700 hover:text-primary-800 font-medium px-2 py-1 rounded-md hover:bg-primary-50 transition-colors"
+                            >
+                              View more commodities
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     )}
                   </div>
-                </div>
-              ));
+                );
+              });
             })()}
           </div>
         ) : message.priceData && message.priceData.length > 0 ? (
@@ -370,6 +464,104 @@ const ChatMessage = ({ message, onSpeak, onSelectMarket, language = 'en' }) => {
             ))}
           </div>
         ) : null}
+
+        {message.stateMarketSelection && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 my-3">
+            {(() => {
+              const markets = message.stateMarketSelection.markets || [];
+              const districtsSet = new Set();
+              markets.forEach(m => {
+                if (m.district) {
+                  districtsSet.add(m.district);
+                }
+              });
+              const districts = Array.from(districtsSet).sort((a, b) => a.localeCompare(b));
+              const hasSelectedDistrict = selectedStateDistrict && districts.includes(selectedStateDistrict);
+              const effectiveDistrict = hasSelectedDistrict ? selectedStateDistrict : '';
+              const marketsInDistrict = effectiveDistrict
+                ? markets.filter(m => m.district === effectiveDistrict)
+                : [];
+              const uniqueMarketsMap = new Map();
+              marketsInDistrict.forEach(m => {
+                const key = `${m.market}|${m.district}|${m.state}`;
+                if (!uniqueMarketsMap.has(key)) {
+                  uniqueMarketsMap.set(key, m);
+                }
+              });
+              const districtMarkets = Array.from(uniqueMarketsMap.values());
+              return (
+                <>
+                  <p className="text-sm font-medium text-gray-700 mb-3">
+                    {message.language === 'hi'
+                      ? `${message.stateMarketSelection.state} के लिए जिला और बाज़ार चुनें:`
+                      : `Select district and market in ${message.stateMarketSelection.state} to see prices:`}
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        {message.language === 'hi' ? 'जिला' : 'District'}
+                      </label>
+                      <select
+                        value={effectiveDistrict}
+                        onChange={(e) => {
+                          setSelectedStateDistrict(e.target.value);
+                          setSelectedStateMarketKey('');
+                        }}
+                        className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary-500"
+                      >
+                        <option value="">
+                          {message.language === 'hi' ? 'जिला चुनें' : 'Select district'}
+                        </option>
+                        {districts.map(district => (
+                          <option key={district} value={district}>
+                            {district}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="flex-1">
+                      <label className="block text-xs font-medium text-gray-600 mb-1">
+                        {message.language === 'hi' ? 'बाज़ार' : 'Market'}
+                      </label>
+                      <select
+                        value={selectedStateMarketKey}
+                        onChange={(e) => setSelectedStateMarketKey(e.target.value)}
+                        disabled={!effectiveDistrict || districtMarkets.length === 0}
+                        className="w-full border border-gray-300 rounded-md px-2.5 py-1.5 text-sm bg-white focus:outline-none focus:ring-1 focus:ring-primary-500 disabled:bg-gray-100 disabled:text-gray-400"
+                      >
+                        <option value="">
+                          {message.language === 'hi' ? 'बाज़ार चुनें' : 'Select market'}
+                        </option>
+                        {districtMarkets.map(market => {
+                          const key = `${market.market}|${market.district}|${market.state}`;
+                          return (
+                            <option key={key} value={key}>
+                              {market.market} ({market.district})
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleStateMarketSubmit}
+                      disabled={!selectedStateMarketKey}
+                      className={`px-3 py-1.5 rounded-md text-xs font-medium ${
+                        selectedStateMarketKey
+                          ? 'bg-primary-600 text-white hover:bg-primary-700'
+                          : 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                      }`}
+                    >
+                      {message.language === 'hi' ? 'कीमतें दिखाएं' : 'Show prices'}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        )}
         
         {/* Market suggestions for disambiguation */}
         {message.marketSuggestions && message.marketSuggestions.suggestions && (

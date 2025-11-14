@@ -566,6 +566,61 @@ export const getMarketsInDistrict = async (district, state, limit = 20) => {
   return data || [];
 };
 
+export const getMarketsInState = async (state, limit = 5000) => {
+  if (!supabase) throw new Error('Supabase not configured');
+
+  if (!state) return [];
+
+  // Try markets_master first (preferred source)
+  const { data, error } = await supabase
+    .from('markets_master')
+    .select('*')
+    .eq('is_active', true)
+    .ilike('state', `%${state}%`)
+    .order('district')
+    .order('market')
+    .limit(limit);
+
+  if (error) {
+    console.warn('Error querying markets_master for state, falling back to market_prices:', error.message);
+  }
+
+  if (data && data.length > 0) {
+    console.log(`✅ Found ${data.length} markets in state ${state} from markets_master`);
+    return data;
+  }
+
+  // Fallback to market_prices if markets_master is empty or unavailable
+  const { data: priceData, error: priceError } = await supabase
+    .from('market_prices')
+    .select('market, district, state')
+    .ilike('state', `%${state}%`)
+    .order('district')
+    .order('market')
+    .limit(limit);
+
+  if (priceError) throw priceError;
+
+  const uniqueMarkets = [];
+  const seen = new Set();
+
+  for (const row of (priceData || [])) {
+    const key = `${row.market}|${row.district}|${row.state}`.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniqueMarkets.push({
+        market: row.market,
+        district: row.district,
+        state: row.state,
+        is_active: true
+      });
+    }
+  }
+
+  console.log(`✅ Found ${uniqueMarkets.length} markets in state ${state} from market_prices fallback`);
+  return uniqueMarkets;
+};
+
 /**
  * Calculate distance between two coordinates using Haversine formula
  */
@@ -670,6 +725,7 @@ export default {
   validateCommodity,
   getNearbyMarkets,
   getMarketsInDistrict,
+  getMarketsInState,
   isDirectModeAvailable,
   formatPriceData
 };
